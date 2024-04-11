@@ -1,0 +1,15 @@
+{
+  "name": "protoc-gen-godot",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "build": "go build",
+    "buf": "npm run build && buf generate proto"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@bufbuild/buf": "^1.30.1"
+  }
+}

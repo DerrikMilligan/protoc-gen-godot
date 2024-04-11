@@ -1,0 +1,3 @@
+proto/compiled/
+node_modules/
+protoc-gen-godot

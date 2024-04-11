@@ -1,0 +1,71 @@
+syntax = "proto3";
+
+// import the needed types
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/duration.proto";
+import "google/protobuf/any.proto";
+
+package test;
+
+option go_package = "protoc-gen-godo/example";
+
+// An enumeration.
+enum TestEnum {
+  UNKNOWN = 0;
+  FIRST = 1;
+  SECOND = 2;
+}
+
+// A nested message.
+message NestedMessage {
+  int32 id = 1;
+  string content = 2;
+}
+
+// The main message.
+message TestMessage {
+  int32 id = 1;
+  string name = 2;
+  bool is_active = 3;
+  TestEnum status = 4;
+  NestedMessage nested = 5;
+  repeated int32 numbers = 6; // A repeated field.
+}
+
+// Oneof message.
+message OneofMessage {
+  oneof value {
+    int32 number = 1;
+    string name = 2;
+  }
+}
+
+// A message with a map field.
+message MapMessage {
+  map<string, int32> values = 1;
+}
+
+// A message with a timestamp field.
+message TimestampMessage {
+  google.protobuf.Timestamp timestamp = 1;
+}
+
+// A message with a duration field.
+message DurationMessage {
+  google.protobuf.Duration duration = 1;
+}
+
+// A message with a field that is a reference to another message.
+message ReferenceMessage {
+  TestMessage reference = 1;
+}
+
+// A message with a field that is a reference to a message in another file.
+// message ExternalReferenceMessage {
+//   ExternalMessage reference = 1;
+// }
+
+// A message with an Any field.
+message AnyMessage {
+  google.protobuf.Any any = 1;
+}
