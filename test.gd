@@ -4,13 +4,16 @@
 
 extends SceneTree
 
-class TypeTest:
-  var integer = null
-  var string = null
+const proto = preload("res://addons/godot-protobuf/proto.gd")
+
+# class TypeTest:
+#   var integer = null
+#   var string = null
 
 func _init():
-  var t = TypeTest.new()
-  print(t.integer)
-  print(t.string)
-  print("Hello!")
+  # var t = TypeTest.new()
+  # print(t.integer)
+  # print(t.string)
+  # print("Hello!")
+  print(proto.ProtobufEncoder.encode_varint(1000))
   quit()
