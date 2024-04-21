@@ -32,6 +32,24 @@ message TestMessage {
   repeated int32 numbers = 6; // A repeated field.
 }
 
+message ScalarMessage {
+  int32    m_int32    = 1;
+  int64    m_int64    = 2;
+  float    m_float    = 3;
+  double   m_double   = 4;
+  uint32   m_uint32   = 5;
+  uint64   m_uint64   = 6;
+  sint32   m_sint32   = 7;
+  sint64   m_sint64   = 8;
+  fixed32  m_fixed32  = 9;
+  fixed64  m_fixed64  = 10;
+  sfixed32 m_sfixed32 = 11;
+  sfixed64 m_sfixed64 = 12;
+  bytes    m_bytes    = 13;
+  bool     m_bool     = 14;
+  string   m_string   = 15;
+}
+
 // Oneof message.
 message OneofMessage {
   oneof value {

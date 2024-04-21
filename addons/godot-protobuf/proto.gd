@@ -73,18 +73,76 @@ class ProtobufEncoder:
 		# Return the binary string
 		return binary_str
 
-	static func encode_varint(value) -> PackedByteArray:
+	static func encode_varint(value, data_type: DATA_TYPE) -> PackedByteArray:
 		var bytes: PackedByteArray = PackedByteArray()
-		print("Value: " + ProtobufEncoder.binary_representation(value))
 
-		while value >= 0x80 && bytes.size() < 10:
-			print("Byte: " + ProtobufEncoder.binary_representation((value & 0x7F) | 0x80))
-			bytes.append((value & 0x7F) | 0x80)
+		if typeof(value) == TYPE_BOOL:
+			value = 1 if value else 0
+
+		# If the value is negative, convert it to a positive number
+		if data_type == DATA_TYPE.SINT32 || data_type == DATA_TYPE.SINT64:
+			if value < -2147483648:
+				value = (value << 1) ^ (value >> 63)
+			else:
+				value = (value << 1) ^ (value >> 31)
+
+		for i in range(9):
+			var byte = value & 0x7F
 			value >>= 7
+			if value:
+				bytes.append(byte | 0x80)
+			else:
+				bytes.append(byte)
+				break
 
-		print("Byte: " + ProtobufEncoder.binary_representation(value))
-		bytes.append(value)
+		# Additional bit to indcate that it's a negative value
+		if bytes.size() == 9 && bytes[8] == 0xFF:
+			bytes.append(0x01)
 
 		return bytes
+
+	static func decode_varint(bytes: PackedByteArray) -> int:
+		var value = 0
+		var shift = 0
+
+		for byte in bytes:
+			value |= (byte & 0x7F) << shift
+			if byte & 0x80 == 0:
+				break
+			shift += 7
+
+		return value
+
+	static func encode_bytes(value, data_type: DATA_TYPE, byte_count: int) -> PackedByteArray:
+		if data_type == DATA_TYPE.FLOAT:
+			var spb = StreamPeerBuffer.new()
+			spb.put_float(value)
+			return spb.get_data_array()
+		
+		if data_type == DATA_TYPE.DOUBLE:
+			var spb = StreamPeerBuffer.new()
+			spb.put_double(value)
+			return spb.get_data_array()
+		
+		var bytes : PackedByteArray = PackedByteArray()
+
+		for i in range(byte_count):
+			bytes.append(value & 0xFF)
+			value >>= 8
+
+		return bytes
+
+	static func encode_field(value, data_type: DATA_TYPE):
+		var wire_type = WIRE_TYPE_LOOKUP[data_type]
+
+		if wire_type == WIRE_TYPE.VARINT:
+			return encode_varint(value, data_type)
+
+		if wire_type == WIRE_TYPE.FIX32:
+			return encode_bytes(value, data_type, 4)
+
+		if wire_type == WIRE_TYPE.FIX64:
+			return encode_bytes(value, data_type, 8)
+
 
 
