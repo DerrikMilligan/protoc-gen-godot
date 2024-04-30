@@ -68,7 +68,8 @@ class ProtobufField:
 	var data_type     : DATA_TYPE
 	var map_key_type  : DATA_TYPE
 	var map_value_type: DATA_TYPE
-	var repeated      : bool = false
+	var repeated      : bool
+	var packed        : bool
 	var message_class
 	var value
 
@@ -78,6 +79,7 @@ class ProtobufField:
 		_data_type: DATA_TYPE,
 		_message_class = null,
 		_repeated: bool = false,
+		_packed: bool = true,
 		_map_key_type: DATA_TYPE = DATA_TYPE.INVALID_TYPE,
 		_map_value_type: DATA_TYPE = DATA_TYPE.INVALID_TYPE
 	):
@@ -85,6 +87,7 @@ class ProtobufField:
 		position       = _position
 		data_type      = _data_type
 		repeated       = _repeated
+		packed         = _packed
 		message_class  = _message_class
 		map_key_type   = _map_key_type
 		map_value_type = _map_value_type
@@ -97,10 +100,35 @@ class ProtobufMessage:
 
 	func _init(initial_data: Dictionary = {}):
 		_init_fields()
+		_load_initial_data(initial_data)
 
+	func _load_initial_data(initial_data: Dictionary):
 		for key in initial_data.keys():
-			if fields.has(key):
-				fields[key].value = initial_data[key]
+			if not fields.has(key):
+				continue
+
+			match fields[key].data_type:
+				DATA_TYPE.MESSAGE:
+					## We can only instantiate the message if we were given a class
+					if fields[key].message_class == null:
+						fields[key].value = initial_data[key]
+						continue
+
+					fields[key].value = fields[key].message_class.new(initial_data[key])
+				
+				DATA_TYPE.MAP:
+					# If we're given a dictionary for a map construct the array of key/value pairs
+					if typeof(initial_data[key]) != TYPE_DICTIONARY:
+						fields[key].value = initial_data[key]
+						continue
+					
+					fields[key].value = []
+
+					for map_key in initial_data[key].keys():
+						fields[key].value.append([ map_key, initial_data[key][map_key] ])
+					
+				_:
+					fields[key].value = initial_data[key]
 
 	## To be overriden by each message to prep it's fields
 	func _init_fields():
@@ -112,10 +140,11 @@ class ProtobufMessage:
 		data_type: DATA_TYPE,
 		message_class = null,
 		repeated: bool = false,
+		packed: bool = true,
 		map_key_type: DATA_TYPE = DATA_TYPE.INVALID_TYPE,
 		map_value_type: DATA_TYPE = DATA_TYPE.INVALID_TYPE
 	):
-		var field = ProtobufField.new(name, position, data_type, message_class, repeated, map_key_type, map_value_type)
+		var field = ProtobufField.new(name, position, data_type, message_class, repeated, packed, map_key_type, map_value_type)
 		fields[name] = field
 
 	func encode() -> PackedByteArray:
@@ -131,15 +160,17 @@ class ProtobufEncoder:
 
 	## Helper class to encode map fields
 	class MapMessage extends ProtobufMessage:
-		func _init(key_type: DATA_TYPE, value_type: DATA_TYPE):
+		func _init(key_type: DATA_TYPE, value_type: DATA_TYPE, initial_data: Dictionary = {}):
 			add_field("key", 1, key_type)
 			add_field("value", 2, value_type)
 
-		func set_key(key):
-			fields["key"].value = key
+			_load_initial_data(initial_data)
 
-		func set_value(value):
-			fields["value"].value = value
+		# func set_key(key):
+		# 	fields["key"].value = key
+
+		# func set_value(value):
+		# 	fields["value"].value = value
 
 	static func encode_varint(_value, data_type: DATA_TYPE) -> PackedByteArray:
 		var bytes: PackedByteArray = PackedByteArray()
@@ -208,37 +239,6 @@ class ProtobufEncoder:
 
 		return bytes
 
-	static func encode_map_field(field: ProtobufField) -> PackedByteArray:
-		# We have to repeat the field descriptor for each key-value pair
-		# the first descripor will already have been added to the byte array
-		var wire_type        = WIRE_TYPE_LOOKUP[field.data_type]
-		var field_descriptor = (field.position << 3) | wire_type
-
-		# This message will hold our key-value pairs in a message we can encode
-		var map_message = MapMessage.new(field.map_key_type, field.map_value_type)
-		var bytes       = PackedByteArray()
-		var field_keys  = field.value.keys()
-
-		# Iterate over every key-value pair in the map
-		for index in len(field_keys):
-
-			# Set the key and value in the map message
-			var key = field_keys[index]
-			map_message.set_key(key)
-			map_message.set_value(field.value[key])
-
-			# Encode the map message and it's size since it's still a length-delmited field
-			var value = map_message.encode()
-			bytes.append_array(encode_varint(value.size(), DATA_TYPE.INT32))
-			bytes.append_array(value)
-
-			# Append the next field descriptor if we're not at the last element
-			if index < len(field_keys) - 1:
-				bytes.append_array(encode_varint(field_descriptor, DATA_TYPE.INT32))
-
-		return bytes
-
-	
 	static func encode_length_delimited_field(field: ProtobufField) -> PackedByteArray:
 		var bytes: PackedByteArray = PackedByteArray()
 		var value: PackedByteArray
@@ -254,7 +254,8 @@ class ProtobufEncoder:
 				value = field.value.encode()
 
 			DATA_TYPE.MAP:
-				return encode_map_field(field)
+				var map_message = MapMessage.new(field.map_key_type, field.map_value_type, { "key": field.value[0], "value": field.value[1] })
+				value = map_message.encode()
 
 			_:
 				assert(false, "Not a length delimited type")
@@ -265,26 +266,39 @@ class ProtobufEncoder:
 
 		return bytes
 
+	static func encode_field_for_wire_type(wire_type: WIRE_TYPE, field: ProtobufField) -> PackedByteArray:
+		match wire_type:
+			WIRE_TYPE.VARINT:
+				return encode_varint_field(field)
+			WIRE_TYPE.FIX32:
+				return encode_fixed_field(field, 4)
+			WIRE_TYPE.FIX64:
+				return encode_fixed_field(field, 8)
+			WIRE_TYPE.LENGTHDEL:
+				return encode_length_delimited_field(field)
+			_:
+				assert(false, "Unsupported wire type")
+				return PackedByteArray()
+
 	static func encode_field(field: ProtobufField) -> PackedByteArray:
 		var wire_type = WIRE_TYPE_LOOKUP[field.data_type]
 		var field_descriptor = (field.position << 3) | wire_type
 		var bytes: PackedByteArray = PackedByteArray(encode_varint(field_descriptor, DATA_TYPE.INT32))
 
-		match wire_type:
-			WIRE_TYPE.VARINT:
-				bytes.append_array(encode_varint_field(field))
+		var field_values = field.value.duplicate() if field.repeated else [ field.value ]
 
-			WIRE_TYPE.FIX32:
-				bytes.append_array(encode_fixed_field(field, 4))
+		for index in len(field_values):
+			field.value = field_values[index]
 
-			WIRE_TYPE.FIX64:
-				bytes.append_array(encode_fixed_field(field, 8))
+			bytes.append_array(encode_field_for_wire_type(wire_type, field))
 
-			WIRE_TYPE.LENGTHDEL:
-				bytes.append_array(encode_length_delimited_field(field))
+			# Append the next field descriptor if we're not at the last element
+			if index < len(field_values) - 1:
+				bytes.append_array(encode_varint(field_descriptor, DATA_TYPE.INT32))
 
-			_:
-				assert(false, "Unsupported wire type")
+		# Restore the original field values if we were repeating
+		if field.repeated:
+			field.value = field_values
 
 		return bytes
 
