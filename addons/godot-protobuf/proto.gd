@@ -10,6 +10,10 @@ enum WIRE_TYPE {
 }
 
 enum DATA_TYPE {
+	# For map field default typing to ensure that there's always a valid
+	# type provided. This will throw exceptions if the type is not provided
+	INVALID_TYPE = -1,
+
 	# VARINT Types
 	BOOL   = 0,
 	ENUM   = 1,
@@ -59,15 +63,31 @@ const WIRE_TYPE_LOOKUP = {
 }
 
 class ProtobufField:
-	var name     : String
-	var position : int
-	var data_type: DATA_TYPE
+	var name          : String
+	var position      : int
+	var data_type     : DATA_TYPE
+	var map_key_type  : DATA_TYPE
+	var map_value_type: DATA_TYPE
+	var repeated      : bool = false
+	var message_class
 	var value
 
-	func _init(_name: String, _position: int, _data_type: DATA_TYPE):
-		name      = _name
-		position  = _position
-		data_type = _data_type
+	func _init(
+		_name: String,
+		_position: int,
+		_data_type: DATA_TYPE,
+		_message_class = null,
+		_repeated: bool = false,
+		_map_key_type: DATA_TYPE = DATA_TYPE.INVALID_TYPE,
+		_map_value_type: DATA_TYPE = DATA_TYPE.INVALID_TYPE
+	):
+		name           = _name
+		position       = _position
+		data_type      = _data_type
+		repeated       = _repeated
+		message_class  = _message_class
+		map_key_type   = _map_key_type
+		map_value_type = _map_value_type
 
 	func encode() -> PackedByteArray:
 		return ProtobufEncoder.encode_field(self)
@@ -86,8 +106,16 @@ class ProtobufMessage:
 	func _init_fields():
 		pass
 
-	func add_field(name: String, position: int, data_type: DATA_TYPE):
-		var field = ProtobufField.new(name, position, data_type)
+	func add_field(
+		name: String,
+		position: int,
+		data_type: DATA_TYPE,
+		message_class = null,
+		repeated: bool = false,
+		map_key_type: DATA_TYPE = DATA_TYPE.INVALID_TYPE,
+		map_value_type: DATA_TYPE = DATA_TYPE.INVALID_TYPE
+	):
+		var field = ProtobufField.new(name, position, data_type, message_class, repeated, map_key_type, map_value_type)
 		fields[name] = field
 
 	func encode() -> PackedByteArray:
@@ -99,57 +127,29 @@ class ProtobufMessage:
 
 		return bytes
 
-	# func decode(bytes: PackedByteArray):
-	# 	var position = 0
-	# 	while position < bytes.size():
-	# 		var byte = bytes[position]
-	# 		var wire_type = byte & 0x07
-	# 		var field_number = byte >> 3
-
-	# 		var field = fields.values().find(lambda f: f.position == field_number)
-	# 		if field == null:
-	# 			position += 1
-	# 			continue
-
-	# 		match wire_type:
-	# 			WIRE_TYPE.VARINT:
-	# 				var varint = ProtobufEncoder.decode_varint(bytes[position+1:])
-	# 				field.value = varint
-	# 				position += 1 + varint.size()
-	# 			WIRE_TYPE.FIX32:
-	# 				var fix32 = bytes[position+1:position+5]
-	# 				var spb = StreamPeerBuffer.new()
-	# 				spb.put_data_array(fix32)
-	# 				field.value = spb.get_float()
-	# 				position += 5
-	# 			WIRE_TYPE.FIX64:
-	# 				var fix64 = bytes[position+1:position+9]
-	# 				var spb = StreamPeerBuffer.new()
-	# 				spb.put_data_array(fix64)
-	# 				field.value = spb.get_double()
-	# 				position += 9
-	# 			WIRE_TYPE.LENGTHDEL:
-	# 				var length = ProtobufEncoder.decode_varint(bytes[position+1:])
-	# 				var data = bytes[position+1+length:position+1+length+length]
-	# 				var spb = StreamPeerBuffer.new()
-	# 				spb.put_data_array(data)
-	# 				field.value = spb.get_data_array()
-	# 				position += 1 + length + length
-	# 			_:
-	# 				assert(false, "Unsupported wire type")
-
-
 class ProtobufEncoder:
 
-	static func encode_varint(field: ProtobufField) -> PackedByteArray:
-		var bytes: PackedByteArray = PackedByteArray()
-		var value = field.value
+	## Helper class to encode map fields
+	class MapMessage extends ProtobufMessage:
+		func _init(key_type: DATA_TYPE, value_type: DATA_TYPE):
+			add_field("key", 1, key_type)
+			add_field("value", 2, value_type)
 
-		if typeof(field.value) == TYPE_BOOL:
+		func set_key(key):
+			fields["key"].value = key
+
+		func set_value(value):
+			fields["value"].value = value
+
+	static func encode_varint(_value, data_type: DATA_TYPE) -> PackedByteArray:
+		var bytes: PackedByteArray = PackedByteArray()
+		var value = _value
+
+		if typeof(_value) == TYPE_BOOL:
 			value = 1 if value else 0
 
 		# If the value is negative, convert it to a positive number
-		if field.data_type == DATA_TYPE.SINT32 || field.data_type == DATA_TYPE.SINT64:
+		if data_type == DATA_TYPE.SINT32 || data_type == DATA_TYPE.SINT64:
 			if value < -2147483648:
 				value = (value << 1) ^ (value >> 63)
 			else:
@@ -170,6 +170,9 @@ class ProtobufEncoder:
 
 		return bytes
 
+	static func encode_varint_field(field: ProtobufField) -> PackedByteArray:
+		return encode_varint(field.value, field.data_type)
+
 	static func decode_varint(bytes: PackedByteArray) -> int:
 		var value = 0
 		var shift = 0
@@ -182,7 +185,7 @@ class ProtobufEncoder:
 
 		return value
 
-	static func encode_bytes(field: ProtobufField, byte_count: int) -> PackedByteArray:
+	static func encode_fixed_field(field: ProtobufField, byte_count: int) -> PackedByteArray:
 		if field.data_type == DATA_TYPE.FLOAT:
 			var spb = StreamPeerBuffer.new()
 			spb.put_float(field.value)
@@ -205,19 +208,81 @@ class ProtobufEncoder:
 
 		return bytes
 
-	static func encode_field(field: ProtobufField) -> PackedByteArray:
-		var bytes: PackedByteArray = PackedByteArray()
-		var wire_type = WIRE_TYPE_LOOKUP[field.data_type]
+	static func encode_map_field(field: ProtobufField) -> PackedByteArray:
+		# We have to repeat the field descriptor for each key-value pair
+		# the first descripor will already have been added to the byte array
+		var wire_type        = WIRE_TYPE_LOOKUP[field.data_type]
+		var field_descriptor = (field.position << 3) | wire_type
 
-		bytes.append((field.position << 3) | wire_type)
+		# This message will hold our key-value pairs in a message we can encode
+		var map_message = MapMessage.new(field.map_key_type, field.map_value_type)
+		var bytes       = PackedByteArray()
+		var field_keys  = field.value.keys()
+
+		# Iterate over every key-value pair in the map
+		for index in len(field_keys):
+
+			# Set the key and value in the map message
+			var key = field_keys[index]
+			map_message.set_key(key)
+			map_message.set_value(field.value[key])
+
+			# Encode the map message and it's size since it's still a length-delmited field
+			var value = map_message.encode()
+			bytes.append_array(encode_varint(value.size(), DATA_TYPE.INT32))
+			bytes.append_array(value)
+
+			# Append the next field descriptor if we're not at the last element
+			if index < len(field_keys) - 1:
+				bytes.append_array(encode_varint(field_descriptor, DATA_TYPE.INT32))
+
+		return bytes
+
+	
+	static func encode_length_delimited_field(field: ProtobufField) -> PackedByteArray:
+		var bytes: PackedByteArray = PackedByteArray()
+		var value: PackedByteArray
+
+		match field.data_type:
+			DATA_TYPE.STRING:
+				value = field.value.to_utf8_buffer()
+
+			DATA_TYPE.BYTES:
+				value = field.value;
+
+			DATA_TYPE.MESSAGE:
+				value = field.value.encode()
+
+			DATA_TYPE.MAP:
+				return encode_map_field(field)
+
+			_:
+				assert(false, "Not a length delimited type")
+
+		# Encode the varint representing the length of the data
+		bytes.append_array(encode_varint(value.size(), DATA_TYPE.INT32))
+		bytes.append_array(value)
+
+		return bytes
+
+	static func encode_field(field: ProtobufField) -> PackedByteArray:
+		var wire_type = WIRE_TYPE_LOOKUP[field.data_type]
+		var field_descriptor = (field.position << 3) | wire_type
+		var bytes: PackedByteArray = PackedByteArray(encode_varint(field_descriptor, DATA_TYPE.INT32))
 
 		match wire_type:
 			WIRE_TYPE.VARINT:
-				bytes.append_array(encode_varint(field))
+				bytes.append_array(encode_varint_field(field))
+
 			WIRE_TYPE.FIX32:
-				bytes.append_array(encode_bytes(field, 4))
+				bytes.append_array(encode_fixed_field(field, 4))
+
 			WIRE_TYPE.FIX64:
-				bytes.append_array(encode_bytes(field, 8))
+				bytes.append_array(encode_fixed_field(field, 8))
+
+			WIRE_TYPE.LENGTHDEL:
+				bytes.append_array(encode_length_delimited_field(field))
+
 			_:
 				assert(false, "Unsupported wire type")
 

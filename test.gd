@@ -6,6 +6,10 @@ extends SceneTree
 
 const proto = preload("res://addons/godot-protobuf/proto.gd")
 
+class SubMessage extends proto.ProtobufMessage:
+  func _init_fields():
+    add_field("int32", 1, proto.DATA_TYPE.INT32)
+
 class TestMessage extends proto.ProtobufMessage:
   func _init_fields():
     add_field("int32", 1, proto.DATA_TYPE.INT32)
@@ -20,74 +24,12 @@ class TestMessage extends proto.ProtobufMessage:
     add_field("fixed64", 10, proto.DATA_TYPE.FIXED64)
     add_field("sfixed32", 11, proto.DATA_TYPE.SFIXED32)
     add_field("sfixed64", 12, proto.DATA_TYPE.SFIXED64)
+    add_field("bool", 13, proto.DATA_TYPE.BOOL)
     add_field("bytes", 14, proto.DATA_TYPE.BYTES)
-    add_field("bool", 15, proto.DATA_TYPE.BOOL)
-
-  func set_int32(value):
-    fields["int32"].value = value;
-
-  func set_int64(value):
-    fields["int64"].value = value;
-
-  func set_uint32(value):
-    fields["uint32"].value = value;
-
-  func set_uint64(value):
-    fields["uint64"].value = value;
-
-  func set_sint32(value):
-    fields["sint32"].value = value;
-
-  func set_sint64(value):
-    fields["sint64"].value = value;
-
-  func set_fixed32(value):
-    fields["fixed32"].value = value;
-  
-  func set_fixed64(value):
-    fields["fixed64"].value = value;
-  
-  func set_sfixed32(value):
-    fields["sfixed32"].value = value;
-  
-  func set_sfixed64(value):
-    fields["sfixed64"].value = value;
-  
-  func set_bool(value):
-    fields["bool"].value = value;
-
-  func get_int32(value):
-    return fields["int32"].value;
-
-  func get_int64(value):
-    return fields["int64"].value;
-
-  func get_uint32(value):
-    return fields["uint32"].value;
-
-  func get_uint64(value):
-    return fields["uint64"].value;
-
-  func get_sint32(value):
-    return fields["sint32"].value;
-
-  func get_sint64(value):
-    return fields["sint64"].value;
-
-  func get_fixed32(value):
-    return fields["fixed32"].value;
-  
-  func get_fixed64(value):
-    return fields["fixed64"].value;
-  
-  func get_sfixed32(value):
-    return fields["sfixed32"].value;
-  
-  func get_sfixed64(value):
-    return fields["sfixed64"].value;
-  
-  func get_bool(value):
-    return fields["bool"].value;
+    add_field("string", 15, proto.DATA_TYPE.STRING)
+    add_field("sub_message", 16, proto.DATA_TYPE.MESSAGE, SubMessage)
+    add_field("map", 17, proto.DATA_TYPE.MAP, null, false, proto.DATA_TYPE.STRING, proto.DATA_TYPE.INT32)
+    add_field("sub_map", 18, proto.DATA_TYPE.MAP, null, false, proto.DATA_TYPE.STRING, proto.DATA_TYPE.MESSAGE)
 
 class TestProtobufEncoder:
   static func run_tests():
@@ -114,8 +56,20 @@ class TestProtobufEncoder:
     assert(TestMessage.new({ "fixed64": 123 }).encode() == PackedByteArray([0x51, 0x7B, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]))
     assert(TestMessage.new({ "sfixed64": 123 }).encode() == PackedByteArray([0x61, 0x7B, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]))
     assert(TestMessage.new({ "sfixed64": -123 }).encode() == PackedByteArray([0x61, 0x85, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]))
-    # assert(TestMessage.new({ "bytes": PackedByteArray([0x01, 0x02, 0x03]) }).encode() == PackedByteArray([0x4D, 0x7B, 0x00, 0x00, 0x00]))
-
+    assert(TestMessage.new({ "bool": false }).encode() == PackedByteArray([0x68, 0x00]))
+    assert(TestMessage.new({ "bool": true }).encode() == PackedByteArray([0x68, 0x01]))
+    assert(TestMessage.new({ "bytes": PackedByteArray([0x01, 0x02, 0x03]) }).encode() == PackedByteArray([0x72, 0x03, 0x01, 0x02, 0x03]))
+    assert(TestMessage.new({ "string": "Test String!" }).encode() == PackedByteArray([0x7A, 0x0C, 0x54, 0x65, 0x73, 0x74, 0x20, 0x53, 0x74, 0x72, 0x69, 0x6E, 0x67, 0x21]))
+    assert(TestMessage.new({ "sub_message": SubMessage.new({ "int32": 123 }) }).encode() == PackedByteArray([0x82, 0x01, 0x02, 0x08, 0x7B]))
+    assert(TestMessage.new({ "map": { "a": 1, "b": 2, "c": 3 } }).encode() == PackedByteArray([
+      0x8A, 0x01, 0x05, 0x0A, 0x01, 0x61, 0x10, 0x01,
+      0x8A, 0x01, 0x05, 0x0A, 0x01, 0x62, 0x10, 0x02,
+      0x8A, 0x01, 0x05, 0x0A, 0x01, 0x63, 0x10, 0x03
+    ]))
+    assert(TestMessage.new({ "sub_map": { "a": SubMessage.new({ "int32": 1 }), "b": SubMessage.new({ "int32": 2 }) } }).encode() == PackedByteArray([
+      0x92, 0x01, 0x07, 0x0A, 0x01, 0x61, 0x12, 0x02, 0x08, 0x01,
+      0x92, 0x01, 0x07, 0x0A, 0x01, 0x62, 0x12, 0x02, 0x08, 0x02
+    ]))
     assert(TestMessage.new({ "int32": 123, "int64": 456, "fixed64": 789 }).encode() == PackedByteArray([0x08, 0x7B, 0x10, 0xC8, 0x03, 0x51, 0x15, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]))
 
 
