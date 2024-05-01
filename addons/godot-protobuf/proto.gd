@@ -287,10 +287,18 @@ class ProtobufEncoder:
 
 		var field_values = field.value.duplicate() if field.repeated else [ field.value ]
 
+		var packed_data: PackedByteArray = PackedByteArray()
+
 		for index in len(field_values):
 			field.value = field_values[index]
 
-			bytes.append_array(encode_field_for_wire_type(wire_type, field))
+			var encoded_field = encode_field_for_wire_type(wire_type, field)
+
+			if field.repeated and field.packed:
+				packed_data.append_array(encoded_field)
+				continue
+				
+			bytes.append_array(encoded_field)
 
 			# Append the next field descriptor if we're not at the last element
 			if index < len(field_values) - 1:
@@ -299,6 +307,10 @@ class ProtobufEncoder:
 		# Restore the original field values if we were repeating
 		if field.repeated:
 			field.value = field_values
+
+			if field.packed:
+				bytes.append_array(encode_varint(packed_data.size(), DATA_TYPE.INT32))
+				bytes.append_array(packed_data)
 
 		return bytes
 
