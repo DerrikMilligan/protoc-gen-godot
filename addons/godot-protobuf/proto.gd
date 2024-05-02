@@ -282,7 +282,7 @@ class ProtobufEncoder:
 
 	static func encode_field(field: ProtobufField) -> PackedByteArray:
 		var wire_type = WIRE_TYPE_LOOKUP[field.data_type]
-		var field_descriptor = (field.position << 3) | wire_type
+		var field_descriptor = (field.position << 3) | (WIRE_TYPE.LENGTHDEL if field.repeated and field.packed else wire_type)
 		var bytes: PackedByteArray = PackedByteArray(encode_varint(field_descriptor, DATA_TYPE.INT32))
 
 		var field_values = field.value.duplicate() if field.repeated else [ field.value ]
@@ -304,8 +304,8 @@ class ProtobufEncoder:
 			if index < len(field_values) - 1:
 				bytes.append_array(encode_varint(field_descriptor, DATA_TYPE.INT32))
 
-		# Restore the original field values if we were repeating
 		if field.repeated:
+			# Restore the original field values if we were repeating
 			field.value = field_values
 
 			if field.packed:
