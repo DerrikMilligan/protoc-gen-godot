@@ -95,6 +95,38 @@ class ProtobufField:
 	func encode() -> PackedByteArray:
 		return ProtobufEncoder.encode_field(self)
 
+	func set_value(_value) -> void:
+		_value = get_clean_value(_value)
+
+	func get_clean_value(_value):
+		match data_type:
+			DATA_TYPE.BOOL:
+				if _value is bool: return _value
+				if _value is int: return _value != 0
+				assert(false, "Invalid value type for field: '%s' value given: '%s'. Must be bool or int" % (name, _value))
+			## TODO: Maybe have the enum type in the message_class and verify the typing
+			DATA_TYPE.ENUM:
+				return _value
+			DATA_TYPE.UINT32:
+				assert(_value >= 0, "Invalid value type for field: '%s' value given: '%s'. Unsigned integer can't be negative" % (name, _value))
+				return _value
+			DATA_TYPE.UINT64:
+				assert(_value >= 0, "Invalid value type for field: '%s' value given: '%s'. Unsigned integer can't be negative" % (name, _value))
+				return _value
+			DATA_TYPE.STRING:
+				return str(_value)
+			DATA_TYPE.BYTES:
+				assert(_value is PackedByteArray, "Invalid value type for field: '%s' value given: '%s'. Expected PackedByteArray" % (name, _value))
+				return _value
+			DATA_TYPE.MESSAGE:
+				assert(_value is message_class, "Invalid value type for field: '%s' value given: '%s'. Expected '%s'" % (name, _value, message_class))
+				return _value
+			DATA_TYPE.MAP:
+				assert(_value is Dictionary, "Invalid value type for field: '%s' value given: '%s'. Expected Dictionary" % (name, _value))
+				return _value
+			_:
+				return _value
+
 class ProtobufMessage:
 	var fields: Dictionary = {}
 
@@ -128,7 +160,7 @@ class ProtobufMessage:
 						fields[key].value.append([ map_key, initial_data[key][map_key] ])
 					
 				_:
-					fields[key].value = initial_data[key]
+					fields[key].set_value(initial_data[key])
 
 	## To be overriden by each message to prep it's fields
 	func _init_fields():
@@ -165,12 +197,6 @@ class ProtobufEncoder:
 			add_field("value", 2, value_type)
 
 			_load_initial_data(initial_data)
-
-		# func set_key(key):
-		# 	fields["key"].value = key
-
-		# func set_value(value):
-		# 	fields["value"].value = value
 
 	static func encode_varint(_value, data_type: DATA_TYPE) -> PackedByteArray:
 		var bytes: PackedByteArray = PackedByteArray()

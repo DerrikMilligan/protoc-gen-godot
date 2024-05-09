@@ -145,8 +145,7 @@ func generateFile(gen *protogen.Plugin, file *protogen.File) {
 		g.P("## @generated from enum ", enum.Desc.Name())
 		g.P("enum ", enum.GoIdent.GoName, " {")
 		for _, value := range enum.Values {
-			g.P("\t## @generated from enum value: ", value.Desc.Name(), " = ", value.Desc.Number())
-			g.P("\t", value.Desc.Name(), " = ", value.Desc.Number(), ",")
+			g.P("\t", value.Desc.Name(), " = ", value.Desc.Number(), ", ## @generated from enum value: ", value.Desc.Name(), " = ", value.Desc.Number())
 		}
 		g.P("}")
 		g.P()
@@ -158,6 +157,7 @@ func generateFile(gen *protogen.Plugin, file *protogen.File) {
 		g.P("## @generated from message ", msg.Desc.Name())
 		g.P("class ", msg.GoIdent.GoName, " extends proto.ProtobufMessage:")
 		g.P("\tfunc _init_fields():")
+
 		for _, field := range msg.Fields {
 			fieldType, ok := getEnumTypeFromField(field)
 
@@ -200,6 +200,18 @@ func generateFile(gen *protogen.Plugin, file *protogen.File) {
 			// g.P("\tvar ", field.Desc.Name(), " = null  # Type: ", getGodotFieldType(field))
 			// g.P()
 		}
+
+		g.P()
+
+		for _, field := range msg.Fields {
+			g.P("\tfunc get_", field.Desc.Name(), "() -> ", getGodotFieldType(field), ":")
+			g.P("\t\treturn fields[\"", field.Desc.Name(), "\"].value")
+			g.P()
+			g.P("\tfunc set_", field.Desc.Name(), "(_value: ", getGodotFieldType(field), "):")
+			g.P("\t\treturn fields[\"", field.Desc.Name(), "\"].set_value(_value)")
+			g.P()
+		}
+
 		g.P()
 		g.P()
 	}
