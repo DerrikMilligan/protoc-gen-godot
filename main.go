@@ -213,7 +213,6 @@ func generateFile(gen *protogen.Plugin, file *protogen.File) {
 		}
 
 		g.P()
-		g.P()
 	}
 
 	// return g

@@ -96,34 +96,52 @@ class ProtobufField:
 		return ProtobufEncoder.encode_field(self)
 
 	func set_value(_value) -> void:
-		_value = get_clean_value(_value)
+		value = get_clean_value(_value)
 
 	func get_clean_value(_value):
 		match data_type:
 			DATA_TYPE.BOOL:
 				if _value is bool: return _value
 				if _value is int: return _value != 0
-				assert(false, "Invalid value type for field: '%s' value given: '%s'. Must be bool or int" % (name, _value))
+				assert(false, "Invalid value type for field: '%s' value given: '%s'. Must be bool or int" % [name, _value])
 			## TODO: Maybe have the enum type in the message_class and verify the typing
 			DATA_TYPE.ENUM:
 				return _value
 			DATA_TYPE.UINT32:
-				assert(_value >= 0, "Invalid value type for field: '%s' value given: '%s'. Unsigned integer can't be negative" % (name, _value))
+				assert(_value >= 0, "Invalid value type for field: '%s' value given: '%s'. Unsigned integer can't be negative" % [name, _value])
 				return _value
 			DATA_TYPE.UINT64:
-				assert(_value >= 0, "Invalid value type for field: '%s' value given: '%s'. Unsigned integer can't be negative" % (name, _value))
+				assert(_value >= 0, "Invalid value type for field: '%s' value given: '%s'. Unsigned integer can't be negative" % [name, _value])
 				return _value
 			DATA_TYPE.STRING:
 				return str(_value)
 			DATA_TYPE.BYTES:
-				assert(_value is PackedByteArray, "Invalid value type for field: '%s' value given: '%s'. Expected PackedByteArray" % (name, _value))
+				assert(_value is PackedByteArray, "Invalid value type for field: '%s' value given: '%s'. Expected PackedByteArray" % [name, _value])
 				return _value
 			DATA_TYPE.MESSAGE:
-				assert(_value is message_class, "Invalid value type for field: '%s' value given: '%s'. Expected '%s'" % (name, _value, message_class))
+				## We can only instantiate the message if we were given a class
+				# assert(message_class != null && _value != null, "Invalid value type for field: '%s' value given: '%s'. Expected '%s'" % [name, _value, message_class])
+				if message_class != null: return message_class.new(_value)
+				# This check doesn't work because it doesn't know it's really a class for some reason
+				# Probably because we're not passing an instance of it around?
+				# if _value is message_class: return _value
 				return _value
+
 			DATA_TYPE.MAP:
-				assert(_value is Dictionary, "Invalid value type for field: '%s' value given: '%s'. Expected Dictionary" % (name, _value))
-				return _value
+				# assert(_value is Dictionary, "Invalid value type for field: '%s' value given: '%s'. Expected Dictionary" % (name, _value))
+				# @TODO: If we pass an array of key/value pairs handle that? Maybe?
+				# @TODO: How do you add a single value?
+
+				# If we're given a dictionary for a map construct the array of key/value pairs
+				if typeof(_value) != TYPE_DICTIONARY:
+					return _value
+
+				var mapped_value = []
+
+				for map_key in _value.keys():
+					mapped_value.append([ map_key, _value[map_key] ])
+
+				return mapped_value
 			_:
 				return _value
 
@@ -136,31 +154,8 @@ class ProtobufMessage:
 
 	func _load_initial_data(initial_data: Dictionary):
 		for key in initial_data.keys():
-			if not fields.has(key):
-				continue
-
-			match fields[key].data_type:
-				DATA_TYPE.MESSAGE:
-					## We can only instantiate the message if we were given a class
-					if fields[key].message_class == null:
-						fields[key].value = initial_data[key]
-						continue
-
-					fields[key].value = fields[key].message_class.new(initial_data[key])
-				
-				DATA_TYPE.MAP:
-					# If we're given a dictionary for a map construct the array of key/value pairs
-					if typeof(initial_data[key]) != TYPE_DICTIONARY:
-						fields[key].value = initial_data[key]
-						continue
-					
-					fields[key].value = []
-
-					for map_key in initial_data[key].keys():
-						fields[key].value.append([ map_key, initial_data[key][map_key] ])
-					
-				_:
-					fields[key].set_value(initial_data[key])
+			if fields.has(key):
+				fields[key].set_value(initial_data[key])
 
 	## To be overriden by each message to prep it's fields
 	func _init_fields():
