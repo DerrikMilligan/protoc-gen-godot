@@ -91,7 +91,13 @@ func getGodotFieldType(field *protogen.Field) string {
 	case protoreflect.BytesKind:
 		return "PoolByteArray"
 	case protoreflect.MessageKind:
-		return string(field.Desc.Message().FullName().Name())
+		// If it's a real message
+		if !field.Desc.IsMap() {
+			return string(field.Desc.Message().FullName().Name())
+		}
+
+		// If it's a map
+		return "Dictionary"
 	// Maybe this would be handled differently?
 	case protoreflect.EnumKind:
 		return string(field.Desc.Enum().FullName().Name())
@@ -169,11 +175,13 @@ func generateFile(gen *protogen.Plugin, file *protogen.File) {
 
 			switch field.Desc.Kind() {
 			case protoreflect.MessageKind:
+				// Regular messages that aren't maps
 				if !field.Desc.IsMap() {
 					fieldMethod = fieldMethod + ", " + string(field.Desc.Message().FullName().Name())
 					break
 				}
 
+				// Map key and value types
 				keyType, ok := getEnumTypeFromKind(field.Desc.MapKey().Kind())
 				if !ok {
 					println("Invalid map key type: ", field.Desc.MapKey().Kind())
