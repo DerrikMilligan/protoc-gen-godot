@@ -225,18 +225,6 @@ class ProtobufEncoder:
 	static func encode_varint_field(field: ProtobufField) -> PackedByteArray:
 		return encode_varint(field.value, field.data_type)
 
-	static func decode_varint(bytes: PackedByteArray) -> int:
-		var value = 0
-		var shift = 0
-
-		for byte in bytes:
-			value |= (byte & 0x7F) << shift
-			if byte & 0x80 == 0:
-				break
-			shift += 7
-
-		return value
-
 	static func encode_fixed_field(field: ProtobufField, byte_count: int) -> PackedByteArray:
 		if field.data_type == DATA_TYPE.FLOAT:
 			var spb = StreamPeerBuffer.new()
@@ -335,3 +323,116 @@ class ProtobufEncoder:
 
 		return bytes
 
+class ProtobufDecoder:
+
+	static func decode_varint(bytes: PackedByteArray, data_type: DATA_TYPE) -> int:
+		var value = 0
+		var shift = 0
+
+		for byte in bytes:
+			value |= (byte & 0x7F) << shift
+
+			# if we don't have the continuation bit then break the loop
+			if (byte & 0x80) == 0:
+				break
+
+			shift += 7
+
+		return value
+
+	static func decode_varint_field(field: ProtobufField, bytes: PackedByteArray) -> int:
+		return decode_varint(bytes, field.data_type)
+
+	static func decode_field_for_wire_type(wire_type: WIRE_TYPE, field: ProtobufField, bytes: PackedByteArray):
+		match wire_type:
+			WIRE_TYPE.VARINT:
+				return decode_varint_field(field, bytes)
+			#WIRE_TYPE.FIX32:
+			#	return decode_fixed_field(field, 4)
+			#WIRE_TYPE.FIX64:
+			#	return decode_fixed_field(field, 8)
+			#WIRE_TYPE.LENGTHDEL:
+			#	return decode_length_delimited_field(field)
+			_:
+				assert(false, "Unsupported wire type")
+				return PackedByteArray()
+
+	static func decode_message(message: ProtobufMessage, bytes: PackedByteArray):
+		var byte_index = 0
+
+		while byte_index < bytes.size():
+			var field_descriptor = decode_varint(bytes.slice(byte_index), DATA_TYPE.INT32)
+			var field_position   = field_descriptor >> 3
+			var wire_type        = field_descriptor & 0x07
+
+			byte_index += field_descriptor
+
+			print(
+				"Field Descriptor: %s, Field Position: %s, Wire Type: %s" % [
+					field_descriptor,
+					field_position,
+					wire_type
+				]
+			)
+
+			var field = null
+
+			for _field in message.fields.values():
+				if _field.position == field_position:
+					field = _field
+					break
+
+			# Skip the field if we don't have it in our fields
+			if field == null:
+				# byte_index += field_descriptor
+				continue
+
+			if field.repeated and field.packed:
+				print("Need to handle packed and repeated field")
+				break
+
+			print(bytes.slice(byte_index))
+			# field.set_value(decode_field_for_wire_type(wire_type, field, bytes.slice(byte_index))
+			#print(field.value)
+
+			break
+
+		# while byte_index < bytes.size():
+		# 	var field_descriptor = decode_varint(bytes.slice(byte_index))
+		# 	byte_index += field_descriptor.size()
+
+		# 	var field_number = field_descriptor >> 3
+		# 	var wire_type    = field_descriptor & 0x07
+
+		# 	var field = message.fields.values().find(lambda f: f.position == field_number)
+
+		# 	if field == null:
+		# 		# Skip the field if we don't have it in our fields
+		# 		var field_bytes = ProtobufEncoder.decode_varint(bytes.slice(byte_index))
+		# 		byte_index += field_bytes.size() + field_bytes
+		# 		continue
+
+		# 	if field.repeated and field.packed and wire_type == WIRE_TYPE.LENGTHDEL:
+		# 		var packed_size = ProtobufEncoder.decode_varint(bytes.slice(byte_index))
+		# 		byte_index += packed_size.size()
+
+		# 		var packed_bytes = bytes.slice(byte_index, byte_index + packed_size)
+		# 		byte_index += packed_size
+
+		# 		var packed_index = 0
+		# 		while packed_index < packed_bytes.size():
+		# 			var value_bytes = packed_bytes.slice(packed_index)
+		# 			packed_index += value_bytes.size()
+
+		# 			field.set_value(value_bytes)
+		# 			message.fields[field.name] = field
+
+		# 		continue
+
+		# 	var value_bytes = bytes.slice(byte_index)
+		# 	byte_index += value_bytes.size()
+
+		# 	field.set_value(value_bytes)
+		# 	message.fields[field.name] = field
+
+		return message
