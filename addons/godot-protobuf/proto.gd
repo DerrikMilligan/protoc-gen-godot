@@ -325,11 +325,13 @@ class ProtobufEncoder:
 
 class ProtobufDecoder:
 
-	static func decode_varint(bytes: PackedByteArray, data_type: DATA_TYPE) -> int:
-		var value = 0
-		var shift = 0
+	static func decode_varint(bytes: PackedByteArray, data_type: DATA_TYPE):
+		var value      = 0
+		var shift      = 0
+		var byte_count = 0
 
 		for byte in bytes:
+			byte_count += 1
 			value |= (byte & 0x7F) << shift
 
 			# if we don't have the continuation bit then break the loop
@@ -338,9 +340,9 @@ class ProtobufDecoder:
 
 			shift += 7
 
-		return value
+		return [ byte_count, value ]
 
-	static func decode_varint_field(field: ProtobufField, bytes: PackedByteArray) -> int:
+	static func decode_varint_field(field: ProtobufField, bytes: PackedByteArray):
 		return decode_varint(bytes, field.data_type)
 
 	static func decode_field_for_wire_type(wire_type: WIRE_TYPE, field: ProtobufField, bytes: PackedByteArray):
@@ -361,19 +363,12 @@ class ProtobufDecoder:
 		var byte_index = 0
 
 		while byte_index < bytes.size():
-			var field_descriptor = decode_varint(bytes.slice(byte_index), DATA_TYPE.INT32)
-			var field_position   = field_descriptor >> 3
-			var wire_type        = field_descriptor & 0x07
+			var decoded_descriptor = decode_varint(bytes.slice(byte_index), DATA_TYPE.INT32)
+			var field_descriptor   = decoded_descriptor[1]
+			var field_position     = field_descriptor >> 3
+			var wire_type          = field_descriptor & 0x07
 
-			byte_index += field_descriptor
-
-			print(
-				"Field Descriptor: %s, Field Position: %s, Wire Type: %s" % [
-					field_descriptor,
-					field_position,
-					wire_type
-				]
-			)
+			byte_index += decoded_descriptor[0]
 
 			var field = null
 
@@ -391,11 +386,18 @@ class ProtobufDecoder:
 				print("Need to handle packed and repeated field")
 				break
 
-			print(bytes.slice(byte_index))
-			# field.set_value(decode_field_for_wire_type(wire_type, field, bytes.slice(byte_index))
-			#print(field.value)
+			var decoded_field = decode_field_for_wire_type(wire_type, field, bytes.slice(byte_index))
+			byte_index += decoded_field[0]
+			field.set_value(decoded_field[1])
 
-			break
+			print(
+				"Field Descriptor: %s, Field Position: %s, Wire Type: %s, Field Value: %s" % [
+					field_descriptor,
+					field_position,
+					wire_type,
+					field.value,
+				]
+			)
 
 		# while byte_index < bytes.size():
 		# 	var field_descriptor = decode_varint(bytes.slice(byte_index))

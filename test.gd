@@ -81,7 +81,8 @@ class TestProtobufEncoder:
     assert(TestMessage.new({ "int32": 123, "int64": 456, "fixed64": 789 }).encode() == PackedByteArray([0x08, 0x7B, 0x10, 0xC8, 0x03, 0x51, 0x15, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]))
 
   static func test_message_decoding():
-    assert(TestMessage.from_bytes([0x08, 0x7B]).encode() == TestMessage.new({ "int32": 123 }).encode())
+    assert(TestMessage.from_bytes(PackedByteArray([0x08, 0x7B])).encode() == TestMessage.new({ "int32": 123 }).encode())
+    assert(TestMessage.from_bytes(PackedByteArray([0x08, 0x7B, 0x10, 0xC8, 0x03])).encode() == TestMessage.new({ "int32": 123, "int64": 456 }).encode())
     # assert(TestMessage.from_bytes([0x7A, 0x0C, 0x54, 0x65, 0x73, 0x74, 0x20, 0x53, 0x74, 0x72, 0x69, 0x6E, 0x67, 0x21]).encode() == TestMessage.new({ "string": "Test String!" }).encode())
 
 func _init():
