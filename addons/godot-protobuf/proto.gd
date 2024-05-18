@@ -183,15 +183,15 @@ class ProtobufMessage:
 
 		return bytes
 
+## Helper class to encode map fields
+class MapMessage extends ProtobufMessage:
+	func _init(key_type: DATA_TYPE, value_type: DATA_TYPE, initial_data: Dictionary = {}):
+		add_field("key", 1, key_type)
+		add_field("value", 2, value_type)
+
+		_load_initial_data(initial_data)
+
 class ProtobufEncoder:
-
-	## Helper class to encode map fields
-	class MapMessage extends ProtobufMessage:
-		func _init(key_type: DATA_TYPE, value_type: DATA_TYPE, initial_data: Dictionary = {}):
-			add_field("key", 1, key_type)
-			add_field("value", 2, value_type)
-
-			_load_initial_data(initial_data)
 
 	static func encode_varint(_value, data_type: DATA_TYPE) -> PackedByteArray:
 		var bytes: PackedByteArray = PackedByteArray()
@@ -200,7 +200,7 @@ class ProtobufEncoder:
 		if typeof(_value) == TYPE_BOOL:
 			value = 1 if value else 0
 
-		# If the value is negative, convert it to a positive number
+		# Encode signed integers using ZigZag encoding
 		if data_type == DATA_TYPE.SINT32 || data_type == DATA_TYPE.SINT64:
 			if value < -2147483648:
 				value = (value << 1) ^ (value >> 63)
@@ -226,20 +226,17 @@ class ProtobufEncoder:
 		return encode_varint(field.value, field.data_type)
 
 	static func encode_fixed_field(field: ProtobufField, byte_count: int) -> PackedByteArray:
+		var bytes: PackedByteArray = PackedByteArray()
+
 		if field.data_type == DATA_TYPE.FLOAT:
-			var spb = StreamPeerBuffer.new()
-			spb.put_float(field.value)
-			return spb.get_data_array()
+			bytes.resize(4)
+			bytes.encode_float(0, field.value)
+			return bytes
 		
 		if field.data_type == DATA_TYPE.DOUBLE:
-			var spb = StreamPeerBuffer.new()
-			spb.put_double(field.value)
-			return spb.get_data_array()
-
-		if field.data_type == DATA_TYPE.FIXED32 or field.data_type == DATA_TYPE.FIXED64:
-			assert(field.value >= 0, "Fixed types can't be negative, use SFIXED instead")
-		
-		var bytes : PackedByteArray = PackedByteArray()
+			bytes.resize(8)
+			bytes.encode_double(0, field.value)
+			return bytes
 
 		var value = field.value
 		for i in range(byte_count):
@@ -340,21 +337,79 @@ class ProtobufDecoder:
 
 			shift += 7
 
+		# Decode signed integers using ZigZag decoding
+		if data_type == DATA_TYPE.SINT32 or data_type == DATA_TYPE.SINT64:
+			if value & 1:
+				value = ~(value >> 1)
+			else:
+				value = value >> 1
+
+		# Convert to boolean if data type is boolean
+		if data_type == TYPE_BOOL:
+			value = value != 0
+
 		return [ byte_count, value ]
 
 	static func decode_varint_field(field: ProtobufField, bytes: PackedByteArray):
 		return decode_varint(bytes, field.data_type)
 
+	static func decode_fixed_field(field: ProtobufField, bytes: PackedByteArray, byte_count: int):
+		if field.data_type == DATA_TYPE.FLOAT:
+			return [ byte_count, bytes.decode_float(0) ]
+		
+		if field.data_type == DATA_TYPE.DOUBLE:
+			return [ byte_count, bytes.decode_double(0) ]
+
+		var value = 0
+		for i in range(byte_count):
+			value |= bytes[i] << (i * 8)
+
+		return [ byte_count, value ]
+
+	static func decode_length_delimited_field(field: ProtobufField, bytes: PackedByteArray):
+		var byte_count = 0
+
+		# Decode the length of the data
+		var length_info = decode_varint(bytes, DATA_TYPE.INT32)
+		var length = length_info[1]
+		byte_count += length_info[0]
+
+		# Extract the length-delimited bytes
+		var value_bytes = bytes.slice(byte_count, byte_count + length)
+		byte_count += length
+
+		# Decode the extracted bytes based on the data type
+		var value
+		match field.data_type:
+			DATA_TYPE.STRING:
+				value = value_bytes.get_string_from_utf8()
+
+			DATA_TYPE.BYTES:
+				value = value_bytes
+
+			DATA_TYPE.MESSAGE:
+				value = decode_message(field.message_class.new(), bytes)
+
+			DATA_TYPE.MAP:
+				var map_message = MapMessage.new(field.map_key_type, field.map_value_type)
+				value = decode_message(map_message, bytes)
+				print(value)
+
+			_:
+				assert(false, "Not a length delimited type")
+
+		return [byte_count, value]
+
 	static func decode_field_for_wire_type(wire_type: WIRE_TYPE, field: ProtobufField, bytes: PackedByteArray):
 		match wire_type:
 			WIRE_TYPE.VARINT:
 				return decode_varint_field(field, bytes)
-			#WIRE_TYPE.FIX32:
-			#	return decode_fixed_field(field, 4)
-			#WIRE_TYPE.FIX64:
-			#	return decode_fixed_field(field, 8)
-			#WIRE_TYPE.LENGTHDEL:
-			#	return decode_length_delimited_field(field)
+			WIRE_TYPE.FIX32:
+				return decode_fixed_field(field, bytes, 4)
+			WIRE_TYPE.FIX64:
+				return decode_fixed_field(field, bytes, 8)
+			WIRE_TYPE.LENGTHDEL:
+				return decode_length_delimited_field(field, bytes)
 			_:
 				assert(false, "Unsupported wire type")
 				return PackedByteArray()
@@ -388,7 +443,13 @@ class ProtobufDecoder:
 
 			var decoded_field = decode_field_for_wire_type(wire_type, field, bytes.slice(byte_index))
 			byte_index += decoded_field[0]
-			field.set_value(decoded_field[1])
+
+			match field.data_type:
+				# For messages we'll already have the message object and just need to assign it
+				DATA_TYPE.MESSAGE:
+					field.value = decoded_field[1]
+				_:
+					field.set_value(decoded_field[1])
 
 			print(
 				"Field Descriptor: %s, Field Position: %s, Wire Type: %s, Field Value: %s" % [
