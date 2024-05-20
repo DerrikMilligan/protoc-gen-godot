@@ -325,16 +325,16 @@ class ProtobufDecoder:
 	static func decode_varint(bytes: PackedByteArray, data_type: DATA_TYPE):
 		var value      = 0
 		var shift      = 0
-		var byte_count = 0
+		var byte_count = 1
 
 		for byte in bytes:
-			byte_count += 1
 			value |= (byte & 0x7F) << shift
 
 			# if we don't have the continuation bit then break the loop
 			if (byte & 0x80) == 0:
 				break
 
+			byte_count += 1
 			shift += 7
 
 		# Decode signed integers using ZigZag decoding
@@ -388,19 +388,33 @@ class ProtobufDecoder:
 				value = value_bytes
 
 			DATA_TYPE.MESSAGE:
-				value = decode_message(field.message_class.new(), bytes)
+				value = decode_message(field.message_class.new(), value_bytes)
 
 			DATA_TYPE.MAP:
-				var bytes_decoded = 0
-
 				value = []
 
-				while bytes_decoded < value_bytes.size():
+				# restart the count because we need to count up each map field and not include the length
+				byte_count = length_info[0]
+
+				while true:
 					var map_message = MapMessage.new(field.map_key_type, field.map_value_type)
-					var key_field   = decode_next_message_field(map_message, bytes.slice(bytes_decoded))
-					bytes_decoded  += key_field[0]
-					var value_field = decode_next_message_field(map_message, bytes.slice(bytes_decoded))
-					bytes_decoded  += value_field[0]
+					var key_field   = decode_next_message_field(map_message, bytes.slice(byte_count))
+					byte_count     += key_field[0]
+					var value_field = decode_next_message_field(map_message, bytes.slice(byte_count))
+					byte_count     += value_field[0]
+
+					# map fields are never packed so we always get the header information again
+					# as well as the length of the field
+					for i in range(2):
+						length_info = decode_varint(bytes.slice(byte_count), DATA_TYPE.INT32)
+
+						byte_count += length_info[0]
+						if length_info[1] == 0:
+							break
+
+					# Check to see if we've reached the end of the map perhaps there's a better way
+					if key_field[1] == null or value_field[1] == null:
+						break
 
 					value.append([ key_field[1], value_field[1] ])
 
@@ -440,11 +454,11 @@ class ProtobufDecoder:
 		# Skip the field if we don't have it in our fields
 		if field == null:
 			# byte_index += field_descriptor
-			return [decoded_descriptor[0], null]
+			return [decoded_descriptor[0], null, null]
 
 		if field.repeated and field.packed:
 			print("Need to handle packed and repeated field")
-			return [decoded_descriptor[0], null]
+			return [decoded_descriptor[0], null, null]
 
 		var field_info = decode_field_for_wire_type(wire_type, field, bytes.slice(decoded_descriptor[0]))
 
@@ -456,12 +470,10 @@ class ProtobufDecoder:
 		while byte_index < bytes.size():
 			var decoded_field = decode_next_message_field(message, bytes.slice(byte_index))
 			var field         = decoded_field[2]
+			byte_index       += decoded_field[0]
 
-			if decoded_field[1] == null:
-				byte_index += decoded_field[0]
+			if decoded_field[1] == null or field == null:
 				continue
-
-			byte_index += decoded_field[0]
 
 			match field.data_type:
 				# For messages we'll already have the message object and just need to assign it
