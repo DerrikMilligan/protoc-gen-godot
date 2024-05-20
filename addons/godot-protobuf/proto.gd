@@ -403,20 +403,23 @@ class ProtobufDecoder:
 					var value_field = decode_next_message_field(map_message, bytes.slice(byte_count))
 					byte_count     += value_field[0]
 
-					# map fields are never packed so we always get the header information again
-					# as well as the length of the field
-					for i in range(2):
-						length_info = decode_varint(bytes.slice(byte_count), DATA_TYPE.INT32)
+					value.append([ key_field[1], value_field[1] ])
 
-						byte_count += length_info[0]
-						if length_info[1] == 0:
-							break
+					# map fields are never packed so we always get the mapper field
+					# information again as well as the length of the field
+					length_info = decode_varint(bytes.slice(byte_count), DATA_TYPE.INT32)
 
-					# Check to see if we've reached the end of the map perhaps there's a better way
-					if key_field[1] == null or value_field[1] == null:
+					var field_position = length_info[1] >> 3
+
+					# If the field position doesn't match the map field position then we've reached the end
+					if field_position != field.position:
 						break
 
-					value.append([ key_field[1], value_field[1] ])
+					byte_count += length_info[0]
+
+					# offset by the length descriptor
+					length_info = decode_varint(bytes.slice(byte_count), DATA_TYPE.INT32)
+					byte_count += length_info[0]
 
 			_:
 				assert(false, "Not a length delimited type")
