@@ -391,9 +391,18 @@ class ProtobufDecoder:
 				value = decode_message(field.message_class.new(), bytes)
 
 			DATA_TYPE.MAP:
-				var map_message = MapMessage.new(field.map_key_type, field.map_value_type)
-				value = decode_message(map_message, bytes)
-				print(value)
+				var bytes_decoded = 0
+
+				value = []
+
+				while bytes_decoded < value_bytes.size():
+					var map_message = MapMessage.new(field.map_key_type, field.map_value_type)
+					var key_field   = decode_next_message_field(map_message, bytes.slice(bytes_decoded))
+					bytes_decoded  += key_field[0]
+					var value_field = decode_next_message_field(map_message, bytes.slice(bytes_decoded))
+					bytes_decoded  += value_field[0]
+
+					value.append([ key_field[1], value_field[1] ])
 
 			_:
 				assert(false, "Not a length delimited type")
@@ -414,34 +423,44 @@ class ProtobufDecoder:
 				assert(false, "Unsupported wire type")
 				return PackedByteArray()
 
+	## Only decodes the first field in the bytes it can find
+	static func decode_next_message_field(message: ProtobufMessage, bytes: PackedByteArray):
+		var decoded_descriptor = decode_varint(bytes, DATA_TYPE.INT32)
+		var field_descriptor   = decoded_descriptor[1]
+		var field_position     = field_descriptor >> 3
+		var wire_type          = field_descriptor & 0x07
+
+		var field = null
+
+		for _field in message.fields.values():
+			if _field.position == field_position:
+				field = _field
+				break
+
+		# Skip the field if we don't have it in our fields
+		if field == null:
+			# byte_index += field_descriptor
+			return [decoded_descriptor[0], null]
+
+		if field.repeated and field.packed:
+			print("Need to handle packed and repeated field")
+			return [decoded_descriptor[0], null]
+
+		var field_info = decode_field_for_wire_type(wire_type, field, bytes.slice(decoded_descriptor[0]))
+
+		return [decoded_descriptor[0] + field_info[0], field_info[1], field]
+
 	static func decode_message(message: ProtobufMessage, bytes: PackedByteArray):
 		var byte_index = 0
 
 		while byte_index < bytes.size():
-			var decoded_descriptor = decode_varint(bytes.slice(byte_index), DATA_TYPE.INT32)
-			var field_descriptor   = decoded_descriptor[1]
-			var field_position     = field_descriptor >> 3
-			var wire_type          = field_descriptor & 0x07
+			var decoded_field = decode_next_message_field(message, bytes.slice(byte_index))
+			var field         = decoded_field[2]
 
-			byte_index += decoded_descriptor[0]
-
-			var field = null
-
-			for _field in message.fields.values():
-				if _field.position == field_position:
-					field = _field
-					break
-
-			# Skip the field if we don't have it in our fields
-			if field == null:
-				# byte_index += field_descriptor
+			if decoded_field[1] == null:
+				byte_index += decoded_field[0]
 				continue
 
-			if field.repeated and field.packed:
-				print("Need to handle packed and repeated field")
-				break
-
-			var decoded_field = decode_field_for_wire_type(wire_type, field, bytes.slice(byte_index))
 			byte_index += decoded_field[0]
 
 			match field.data_type:
@@ -450,52 +469,5 @@ class ProtobufDecoder:
 					field.value = decoded_field[1]
 				_:
 					field.set_value(decoded_field[1])
-
-			print(
-				"Field Descriptor: %s, Field Position: %s, Wire Type: %s, Field Value: %s" % [
-					field_descriptor,
-					field_position,
-					wire_type,
-					field.value,
-				]
-			)
-
-		# while byte_index < bytes.size():
-		# 	var field_descriptor = decode_varint(bytes.slice(byte_index))
-		# 	byte_index += field_descriptor.size()
-
-		# 	var field_number = field_descriptor >> 3
-		# 	var wire_type    = field_descriptor & 0x07
-
-		# 	var field = message.fields.values().find(lambda f: f.position == field_number)
-
-		# 	if field == null:
-		# 		# Skip the field if we don't have it in our fields
-		# 		var field_bytes = ProtobufEncoder.decode_varint(bytes.slice(byte_index))
-		# 		byte_index += field_bytes.size() + field_bytes
-		# 		continue
-
-		# 	if field.repeated and field.packed and wire_type == WIRE_TYPE.LENGTHDEL:
-		# 		var packed_size = ProtobufEncoder.decode_varint(bytes.slice(byte_index))
-		# 		byte_index += packed_size.size()
-
-		# 		var packed_bytes = bytes.slice(byte_index, byte_index + packed_size)
-		# 		byte_index += packed_size
-
-		# 		var packed_index = 0
-		# 		while packed_index < packed_bytes.size():
-		# 			var value_bytes = packed_bytes.slice(packed_index)
-		# 			packed_index += value_bytes.size()
-
-		# 			field.set_value(value_bytes)
-		# 			message.fields[field.name] = field
-
-		# 		continue
-
-		# 	var value_bytes = bytes.slice(byte_index)
-		# 	byte_index += value_bytes.size()
-
-		# 	field.set_value(value_bytes)
-		# 	message.fields[field.name] = field
 
 		return message
