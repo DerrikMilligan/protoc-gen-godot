@@ -63,13 +63,13 @@ const WIRE_TYPE_LOOKUP = {
 }
 
 class ProtobufField:
-	var name          : String
-	var position      : int
-	var data_type     : DATA_TYPE
-	var map_key_type  : DATA_TYPE
-	var map_value_type: DATA_TYPE
-	var repeated      : bool
-	var packed        : bool
+	var name     : String
+	var position : int
+	var data_type: DATA_TYPE
+	var repeated : bool
+	var packed   : bool
+	var map_key_type
+	var map_value_type
 	var message_class
 	var value
 
@@ -80,8 +80,9 @@ class ProtobufField:
 		_message_class = null,
 		_repeated: bool = false,
 		_packed: bool = true,
-		_map_key_type: DATA_TYPE = DATA_TYPE.INVALID_TYPE,
-		_map_value_type: DATA_TYPE = DATA_TYPE.INVALID_TYPE
+		# These can also be other messages
+		_map_key_type = DATA_TYPE.INVALID_TYPE,
+		_map_value_type = DATA_TYPE.INVALID_TYPE
 	):
 		name           = _name
 		position       = _position
@@ -119,29 +120,32 @@ class ProtobufField:
 				assert(_value is PackedByteArray, "Invalid value type for field: '%s' value given: '%s'. Expected PackedByteArray" % [name, _value])
 				return _value
 			DATA_TYPE.MESSAGE:
-				## We can only instantiate the message if we were given a class
-				# assert(message_class != null && _value != null, "Invalid value type for field: '%s' value given: '%s'. Expected '%s'" % [name, _value, message_class])
-				if message_class != null: return message_class.new(_value)
-				# This check doesn't work because it doesn't know it's really a class for some reason
-				# Probably because we're not passing an instance of it around?
-				# if _value is message_class: return _value
-				return _value
+				assert(message_class != null, "Invalid value type for field: '%s' value given: '%s'. Field doesn't support a message type of value" % [name, _value])
+				match typeof(_value):
+					TYPE_OBJECT:
+						return _value
+					TYPE_DICTIONARY:
+						return message_class.new(_value)
+					_:
+						assert(false, "Invalid value type for field: '%s' value given: '%s'. Expected '%s'" % [name, _value, message_class])
 
 			DATA_TYPE.MAP:
 				# assert(_value is Dictionary, "Invalid value type for field: '%s' value given: '%s'. Expected Dictionary" % (name, _value))
 				# @TODO: If we pass an array of key/value pairs handle that? Maybe?
 				# @TODO: How do you add a single value?
 
-				# If we're given a dictionary for a map construct the array of key/value pairs
-				if typeof(_value) != TYPE_DICTIONARY:
-					return _value
+				match typeof(_value):
+					TYPE_ARRAY:
+						return _value
+					# If we're given an array of values construct the array of key/value pairs
+					TYPE_DICTIONARY:
+						var mapped_values = []
+						for map_key in _value:
+							mapped_values.append([ map_key, _value[map_key] ])
+						return mapped_values
+					_:
+						assert(false, "Invalid value type for field: '%s' value given: '%s'. Expected Array or Dictionary" % [name, _value])
 
-				var mapped_value = []
-
-				for map_key in _value.keys():
-					mapped_value.append([ map_key, _value[map_key] ])
-
-				return mapped_value
 			_:
 				return _value
 
@@ -168,8 +172,9 @@ class ProtobufMessage:
 		message_class = null,
 		repeated: bool = false,
 		packed: bool = true,
-		map_key_type: DATA_TYPE = DATA_TYPE.INVALID_TYPE,
-		map_value_type: DATA_TYPE = DATA_TYPE.INVALID_TYPE
+		# These can also refer to other message types uses as keys or values
+		map_key_type = DATA_TYPE.INVALID_TYPE,
+		map_value_type = DATA_TYPE.INVALID_TYPE
 	):
 		var field = ProtobufField.new(name, position, data_type, message_class, repeated, packed, map_key_type, map_value_type)
 		fields[name] = field
@@ -185,9 +190,15 @@ class ProtobufMessage:
 
 ## Helper class to encode map fields
 class MapMessage extends ProtobufMessage:
-	func _init(key_type: DATA_TYPE, value_type: DATA_TYPE, initial_data: Dictionary = {}):
-		add_field("key", 1, key_type)
-		add_field("value", 2, value_type)
+	func _init(
+		key_type: DATA_TYPE,
+		value_type: DATA_TYPE,
+		initial_data: Dictionary = {},
+		key_message_class = null,
+		value_message_class = null
+	):
+		add_field("key", 1, key_type, key_message_class)
+		add_field("value", 2, value_type, value_message_class)
 
 		_load_initial_data(initial_data)
 
@@ -260,7 +271,16 @@ class ProtobufEncoder:
 				value = field.value.encode()
 
 			DATA_TYPE.MAP:
-				var map_message = MapMessage.new(field.map_key_type, field.map_value_type, { "key": field.value[0], "value": field.value[1] })
+				var key_is_class   = typeof(field.map_key_type)   != TYPE_INT
+				var value_is_class = typeof(field.map_value_type) != TYPE_INT
+
+				var map_message = MapMessage.new(
+					DATA_TYPE.MESSAGE if key_is_class   else field.map_key_type,
+					DATA_TYPE.MESSAGE if value_is_class else field.map_value_type,
+					{ "key": field.value[0], "value": field.value[1] },
+					field.map_key_type   if key_is_class   else null,
+					field.map_value_type if value_is_class else null
+				)
 				value = map_message.encode()
 
 			_:
@@ -396,8 +416,18 @@ class ProtobufDecoder:
 				# restart the count because we need to count up each map field and not include the length
 				byte_count = length_info[0]
 
+				var key_is_class   = typeof(field.map_key_type)   != TYPE_INT
+				var value_is_class = typeof(field.map_value_type) != TYPE_INT
+
+				var map_message = MapMessage.new(
+					DATA_TYPE.MESSAGE if key_is_class   else field.map_key_type,
+					DATA_TYPE.MESSAGE if value_is_class else field.map_value_type,
+					{},
+					field.map_key_type   if key_is_class   else null,
+					field.map_value_type if value_is_class else null
+				)
+
 				while true:
-					var map_message = MapMessage.new(field.map_key_type, field.map_value_type)
 					var key_field   = decode_next_message_field(map_message, bytes.slice(byte_count))
 					byte_count     += key_field[0]
 					var value_field = decode_next_message_field(map_message, bytes.slice(byte_count))
@@ -457,15 +487,15 @@ class ProtobufDecoder:
 		# Skip the field if we don't have it in our fields
 		if field == null:
 			# byte_index += field_descriptor
-			return [decoded_descriptor[0], null, null]
+			return [ decoded_descriptor[0], null, null ]
 
 		if field.repeated and field.packed:
 			print("Need to handle packed and repeated field")
-			return [decoded_descriptor[0], null, null]
+			return [ decoded_descriptor[0], null, null ]
 
 		var field_info = decode_field_for_wire_type(wire_type, field, bytes.slice(decoded_descriptor[0]))
 
-		return [decoded_descriptor[0] + field_info[0], field_info[1], field]
+		return [ decoded_descriptor[0] + field_info[0], field_info[1], field ]
 
 	static func decode_message(message: ProtobufMessage, bytes: PackedByteArray):
 		var byte_index = 0

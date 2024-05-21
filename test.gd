@@ -32,7 +32,7 @@ class TestMessage extends proto.ProtobufMessage:
     add_field("string", 15, proto.DATA_TYPE.STRING)
     add_field("sub_message", 16, proto.DATA_TYPE.MESSAGE, SubMessage)
     add_field("map", 17, proto.DATA_TYPE.MAP, null, true, false, proto.DATA_TYPE.STRING, proto.DATA_TYPE.INT32)
-    add_field("sub_map", 18, proto.DATA_TYPE.MAP, null, true, false, proto.DATA_TYPE.STRING, proto.DATA_TYPE.MESSAGE)
+    add_field("sub_map", 18, proto.DATA_TYPE.MAP, null, true, false, proto.DATA_TYPE.STRING, SubMessage)
     add_field("r_int32", 19, proto.DATA_TYPE.INT32, null, true)
     add_field("big_int32", 12345, proto.DATA_TYPE.INT32)
 
@@ -73,7 +73,7 @@ class TestProtobufEncoder:
       0x8A, 0x01, 0x05, 0x0A, 0x01, 0x62, 0x10, 0x02,
       0x8A, 0x01, 0x05, 0x0A, 0x01, 0x63, 0x10, 0x03
     ]))
-    assert(TestMessage.new({ "sub_map": { "a": SubMessage.new({ "int32": 1 }), "b": SubMessage.new({ "int32": 2 }) } }).encode() == PackedByteArray([
+    assert(TestMessage.new({ "sub_map": { "a": { "int32": 1 }, "b": SubMessage.new({ "int32": 2 }) } }).encode() == PackedByteArray([
       0x92, 0x01, 0x07, 0x0A, 0x01, 0x61, 0x12, 0x02, 0x08, 0x01,
       0x92, 0x01, 0x07, 0x0A, 0x01, 0x62, 0x12, 0x02, 0x08, 0x02
     ]))
@@ -112,10 +112,10 @@ class TestProtobufEncoder:
       0x8A, 0x01, 0x05, 0x0A, 0x01, 0x62, 0x10, 0x02,
       0x8A, 0x01, 0x05, 0x0A, 0x01, 0x63, 0x10, 0x03
     ])).encode() == TestMessage.new({ "map": { "a": 1, "b": 2, "c": 3 } }).encode())
-    # assert(TestMessage.from_bytes(PackedByteArray([
-    #   0x92, 0x01, 0x07, 0x0A, 0x01, 0x61, 0x12, 0x02, 0x08, 0x01,
-    #   0x92, 0x01, 0x07, 0x0A, 0x01, 0x62, 0x12, 0x02, 0x08, 0x02
-    # ])).encode() == TestMessage.new({ "sub_map": { "a": SubMessage.new({ "int32": 1 }), "b": SubMessage.new({ "int32": 2 }) } }).encode())
+    assert(TestMessage.from_bytes(PackedByteArray([
+      0x92, 0x01, 0x07, 0x0A, 0x01, 0x61, 0x12, 0x02, 0x08, 0x01,
+      0x92, 0x01, 0x07, 0x0A, 0x01, 0x62, 0x12, 0x02, 0x08, 0x02
+    ])).encode() == TestMessage.new({ "sub_map": { "a": { "int32": 1 }, "b": SubMessage.new({ "int32": 2 }) } }).encode())
     # assert(TestMessage.from_bytes(PackedByteArray([0x9A, 0x01, 0x03, 0x01, 0x02, 0x03])).encode() == TestMessage.new({ "r_int32": [ 1, 2, 3 ] }).encode())
     assert(TestMessage.from_bytes(PackedByteArray([0x08, 0x7B, 0x10, 0xC8, 0x03, 0x51, 0x15, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])).encode() == TestMessage.new({ "int32": 123, "int64": 456, "fixed64": 789 }).encode())
 
