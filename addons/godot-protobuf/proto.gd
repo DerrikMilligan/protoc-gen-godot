@@ -490,8 +490,20 @@ class ProtobufDecoder:
 			return [ decoded_descriptor[0], null, null ]
 
 		if field.repeated and field.packed:
-			print("Need to handle packed and repeated field")
-			return [ decoded_descriptor[0], null, null ]
+			var byte_length = decoded_descriptor[0]
+			var repeated_length = decode_varint(bytes.slice(byte_length), DATA_TYPE.INT32)
+			var item_wire_type = WIRE_TYPE_LOOKUP[field.data_type]
+
+			byte_length += repeated_length[0]
+
+			var repeated_items = []
+
+			for i in range(repeated_length[1]):
+				var repeated_field = decode_field_for_wire_type(item_wire_type, field, bytes.slice(byte_length))
+				byte_length += repeated_field[0]
+				repeated_items.append(repeated_field[1])
+
+			return [ byte_length, repeated_items, field ]
 
 		var field_info = decode_field_for_wire_type(wire_type, field, bytes.slice(decoded_descriptor[0]))
 
