@@ -105,8 +105,9 @@ class ProtobufField:
 				if _value is bool: return _value
 				if _value is int: return _value != 0
 				assert(false, "Invalid value type for field: '%s' value given: '%s'. Must be bool or int" % [name, _value])
-			## TODO: Maybe have the enum type in the message_class and verify the typing
 			DATA_TYPE.ENUM:
+				assert(_value is int, "Invalid value type for field: '%s' value given: '%s'. Must be int and one of these values: %s" % [name, _value, message_class])
+				assert(_value in message_class.values(), "Invalid value for field: '%s' value given: '%s'. Must be one of: %s" % [name, _value, message_class])
 				return _value
 			DATA_TYPE.UINT32:
 				assert(_value >= 0, "Invalid value type for field: '%s' value given: '%s'. Unsigned integer can't be negative" % [name, _value])
@@ -365,7 +366,7 @@ class ProtobufDecoder:
 				value = value >> 1
 
 		# Convert to boolean if data type is boolean
-		if data_type == TYPE_BOOL:
+		if data_type == DATA_TYPE.BOOL:
 			value = value != 0
 
 		return [ byte_count, value ]

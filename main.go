@@ -13,7 +13,6 @@ func main() {
 			if !f.Generate {
 				continue
 			}
-
 			generateFile(gen, f)
 		}
 		return nil
@@ -193,6 +192,9 @@ func generateFile(gen *protogen.Plugin, file *protogen.File) {
 					return
 				}
 				fieldMethod = fieldMethod + ", null, true, false, proto.DATA_TYPE." + keyType + ", proto.DATA_TYPE." + valueType
+
+			case protoreflect.EnumKind:
+				fieldMethod = fieldMethod + ", " + string(field.Desc.Enum().FullName().Name())
 
 			default:
 				if field.Desc.IsList() {

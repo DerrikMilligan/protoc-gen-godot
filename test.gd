@@ -6,6 +6,15 @@ extends SceneTree
 
 const proto = preload("res://addons/godot-protobuf/proto.gd")
 
+
+## @generated from enum TestEnum
+enum TestEnum {
+  UNKNOWN = 0, ## @generated from enum value: UNKNOWN = 0
+  FIRST = 1, ## @generated from enum value: FIRST = 1
+  SECOND = 2, ## @generated from enum value: SECOND = 2
+}
+
+
 class SubMessage extends proto.ProtobufMessage:
   func _init_fields():
     add_field("int32", 1, proto.DATA_TYPE.INT32)
@@ -34,6 +43,7 @@ class TestMessage extends proto.ProtobufMessage:
     add_field("map", 17, proto.DATA_TYPE.MAP, null, true, false, proto.DATA_TYPE.STRING, proto.DATA_TYPE.INT32)
     add_field("sub_map", 18, proto.DATA_TYPE.MAP, null, true, false, proto.DATA_TYPE.STRING, SubMessage)
     add_field("r_int32", 19, proto.DATA_TYPE.INT32, null, true)
+    add_field("enum", 20, proto.DATA_TYPE.ENUM, TestEnum) ## @generated from field: enum m_enum = 20
     add_field("big_int32", 12345, proto.DATA_TYPE.INT32)
 
 class TestProtobufEncoder:
@@ -79,6 +89,7 @@ class TestProtobufEncoder:
     ]))
     assert(TestMessage.new({ "r_int32": [ 1, 2, 3 ] }).encode() == PackedByteArray([0x9A, 0x01, 0x03, 0x01, 0x02, 0x03]))
     assert(TestMessage.new({ "int32": 123, "int64": 456, "fixed64": 789 }).encode() == PackedByteArray([0x08, 0x7B, 0x10, 0xC8, 0x03, 0x51, 0x15, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]))
+    assert(TestMessage.new({ "enum": TestEnum.FIRST }).encode() == PackedByteArray([0xA0, 0x01, 0x01]))
 
   static func test_message_decoding():
     assert(TestMessage.from_bytes(PackedByteArray([0x08, 0x7B])).encode() == TestMessage.new({ "int32": 123 }).encode())
@@ -118,6 +129,7 @@ class TestProtobufEncoder:
     ])).encode() == TestMessage.new({ "sub_map": { "a": { "int32": 1 }, "b": SubMessage.new({ "int32": 2 }) } }).encode())
     assert(TestMessage.from_bytes(PackedByteArray([0x9A, 0x01, 0x03, 0x01, 0x02, 0x03])).encode() == TestMessage.new({ "r_int32": [ 1, 2, 3 ] }).encode())
     assert(TestMessage.from_bytes(PackedByteArray([0x08, 0x7B, 0x10, 0xC8, 0x03, 0x51, 0x15, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])).encode() == TestMessage.new({ "int32": 123, "int64": 456, "fixed64": 789 }).encode())
+    assert(TestMessage.from_bytes(PackedByteArray([0xA0, 0x01, 0x01])).encode() == TestMessage.new({ "enum": TestEnum.FIRST }).encode())
 
 func _init():
   TestProtobufEncoder.run_tests()
