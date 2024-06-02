@@ -94,43 +94,39 @@ func getGodotFieldType(field *protogen.Field) string {
 		if !field.Desc.IsMap() {
 			return string(field.Desc.Message().FullName().Name())
 		}
-
 		// If it's a map
 		return "Dictionary"
-	// Maybe this would be handled differently?
 	case protoreflect.EnumKind:
 		return string(field.Desc.Enum().FullName().Name())
-		// return "int"
 	}
 	return "Unknown " + field.Desc.Kind().String()
 }
 
-func getGodotDefaultValue(field *protogen.Field) string {
-	switch field.Desc.Kind() {
-	case protoreflect.BoolKind:
-		return "false"
-	case protoreflect.Int32Kind, protoreflect.Sint32Kind, protoreflect.Sfixed32Kind:
-	case protoreflect.Int64Kind, protoreflect.Sint64Kind, protoreflect.Sfixed64Kind:
-	case protoreflect.Uint32Kind, protoreflect.Fixed32Kind:
-	case protoreflect.Uint64Kind, protoreflect.Fixed64Kind:
-		return "0"
-	case protoreflect.FloatKind:
-	case protoreflect.DoubleKind:
-		return "0.0"
-	case protoreflect.StringKind:
-		return "\"\""
-	case protoreflect.BytesKind:
-		return "PackedByteArray()"
-	case protoreflect.MessageKind:
-		return "null"
-	// Maybe this would be handled differently?
-	case protoreflect.EnumKind:
-		return "0"
-	}
-	return "null"
-}
+// func getGodotDefaultValue(field *protogen.Field) string {
+// 	switch field.Desc.Kind() {
+// 	case protoreflect.BoolKind:
+// 		return "false"
+// 	case protoreflect.Int32Kind, protoreflect.Sint32Kind, protoreflect.Sfixed32Kind:
+// 	case protoreflect.Int64Kind, protoreflect.Sint64Kind, protoreflect.Sfixed64Kind:
+// 	case protoreflect.Uint32Kind, protoreflect.Fixed32Kind:
+// 	case protoreflect.Uint64Kind, protoreflect.Fixed64Kind:
+// 		return "0"
+// 	case protoreflect.FloatKind:
+// 	case protoreflect.DoubleKind:
+// 		return "0.0"
+// 	case protoreflect.StringKind:
+// 		return "\"\""
+// 	case protoreflect.BytesKind:
+// 		return "PackedByteArray()"
+// 	case protoreflect.MessageKind:
+// 		return "null"
+// 	// Maybe this would be handled differently?
+// 	case protoreflect.EnumKind:
+// 		return "0"
+// 	}
+// 	return "null"
+// }
 
-// generateFile generates a _ascii.pb.go file containing gRPC service definitions.
 func generateFile(gen *protogen.Plugin, file *protogen.File) {
 	filename := file.GeneratedFilenamePrefix + "_pb.gd"
 	g := gen.NewGeneratedFile(filename, file.GoImportPath)
@@ -207,23 +203,27 @@ func generateFile(gen *protogen.Plugin, file *protogen.File) {
 			}
 
 			g.P(fieldMethod, ")", " ## @generated from field: ", field.Desc.Kind().String(), " ", field.Desc.Name(), " = ", field.Desc.Number())
-			// g.P("\tvar ", field.Desc.Name(), " = null  # Type: ", getGodotFieldType(field))
-			// g.P()
 		}
 
 		g.P()
 
 		for _, field := range msg.Fields {
 			g.P("\tfunc get_", field.Desc.Name(), "() -> ", getGodotFieldType(field), ":")
-			g.P("\t\treturn fields[\"", field.Desc.Name(), "\"].value")
+			g.P("\t\treturn fields[\"", field.Desc.Name(), "\"].get_value()")
 			g.P()
 			g.P("\tfunc set_", field.Desc.Name(), "(_value: ", getGodotFieldType(field), "):")
 			g.P("\t\treturn fields[\"", field.Desc.Name(), "\"].set_value(_value)")
 			g.P()
+
+			// Potentially in the future we could add a set method for maps to set the key and value
+			// if field.Desc.IsMap() {
+			// 	g.P("\tfunc set_", field.Desc.Name(), "(_value: ", getGodotFieldType(field), "):")
+			// 	g.P("\t\treturn fields[\"", field.Desc.Name(), "\"].set_value(_value)")
+			// 	g.P()
+			// }
 		}
 
 		g.P()
 	}
 
-	// return g
 }

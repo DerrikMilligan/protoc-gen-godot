@@ -96,6 +96,19 @@ class ProtobufField:
 	func encode() -> PackedByteArray:
 		return ProtobufEncoder.encode_field(self)
 
+	func get_value():
+		match data_type:
+			DATA_TYPE.MAP:
+				var map_dictionary = {}
+
+				for item in value:
+					map_dictionary[item[0]] = item[1]
+
+				return map_dictionary
+
+			_:
+				return value
+
 	func set_value(_value) -> void:
 		value = get_clean_value(_value)
 
@@ -383,7 +396,17 @@ class ProtobufDecoder:
 
 		var value = 0
 		for i in range(byte_count):
-			value |= bytes[i] << (i * 8)
+			value |= (bytes[i] << (i * 8))
+
+		# Because in gdscript every integer is actually a 64-bit integer, when we get a negative value
+		# for a 32-bit integer, we need to sign-extend it to 64 bits. Praise be ChatGPT... I'm sure I could
+		# understand this given enough time... But for now it works.
+		# Check if the number is negative
+		var most_significant_bit = 1 << ((byte_count * 8) - 1)
+		if value & most_significant_bit != 0:
+			# Sign-extend to 64 bits
+			value |= -most_significant_bit
+
 
 		return [ byte_count, value ]
 
