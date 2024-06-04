@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"slices"
 
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -160,6 +161,11 @@ func generateFile(gen *protogen.Plugin, file *protogen.File) {
 		g.P("\tstatic func from_bytes(bytes: PackedByteArray) -> ", msg.GoIdent.GoName, ":")
 		g.P("\t\treturn proto.ProtobufDecoder.decode_message(", msg.GoIdent.GoName, ".new(), bytes)")
 		g.P()
+
+		if len(msg.Fields) <= 0 {
+			continue
+		}
+
 		g.P("\tfunc _init_fields():")
 
 		for _, field := range msg.Fields {
@@ -177,7 +183,7 @@ func generateFile(gen *protogen.Plugin, file *protogen.File) {
 				if !field.Desc.IsMap() {
 					fieldMethod = fieldMethod + ", " + string(field.Desc.Message().FullName().Name())
 					if field.Oneof != nil {
-						fieldMethod = fieldMethod + ", false, true, -1, -1, " + field.Oneof.GoName
+						fieldMethod = fieldMethod + ", false, true, -1, -1, \"" + string(field.Oneof.Desc.Name()) + "\""
 					}
 					break
 				}
@@ -246,16 +252,39 @@ func generateFile(gen *protogen.Plugin, file *protogen.File) {
 			g.P("\tfunc get_", field.Desc.Name(), "() -> ", getGodotFieldType(field), ":")
 			g.P("\t\treturn get_field(\"", field.Desc.Name(), "\") as ", getGodotFieldType(field))
 			g.P()
-			g.P("\tfunc set_", field.Desc.Name(), "(_value: ", getGodotFieldType(field), "):")
-			g.P("\t\tset_field(\"", field.Desc.Name(), "\", _value)")
+			g.P("\tfunc set_", field.Desc.Name(), "(value: ", getGodotFieldType(field), "):")
+			g.P("\t\tset_field(\"", field.Desc.Name(), "\", value)")
 			g.P()
 
 			// Potentially in the future we could add a set method for maps to set the key and value
 			// if field.Desc.IsMap() {
-			// 	g.P("\tfunc set_", field.Desc.Name(), "(_value: ", getGodotFieldType(field), "):")
-			// 	g.P("\t\treturn fields[\"", field.Desc.Name(), "\"].set_value(_value)")
+			// 	g.P("\tfunc set_", field.Desc.Name(), "(value: ", getGodotFieldType(field), "):")
+			// 	g.P("\t\treturn fields[\"", field.Desc.Name(), "\"].set_value(value)")
 			// 	g.P()
 			// }
+		}
+
+		var oneofs []string
+
+		for _, field := range msg.Fields {
+			if field.Oneof == nil {
+				continue
+			}
+
+			oneofName := string(field.Oneof.Desc.Name())
+
+			if slices.Contains(oneofs, oneofName) {
+				continue
+			}
+
+			oneofs = append(oneofs, oneofName)
+
+			g.P("\tfunc get_", oneofName, "():")
+			g.P("\t\treturn get_field(\"", oneofName, "\")")
+			g.P()
+			g.P("\tfunc set_", oneofName, "(value):")
+			g.P("\t\treturn set_field(\"", oneofName, "\", value)")
+			g.P()
 		}
 
 		g.P()
