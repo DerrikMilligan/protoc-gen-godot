@@ -41,6 +41,11 @@ message ScalarMessage {
 	map<string, SubMessage> m_mapped_sub = 18;
 	repeated int32 r_int32 = 19;
   TestEnum m_enum = 20;
+  oneof some_int32 {
+    int32 oneof_int32_1 = 30;
+    int32 oneof_int32_2 = 31;
+    int32 oneof_int32_3 = 32;
+  }
 	int32 r_big_int32 = 12345;
 }
 

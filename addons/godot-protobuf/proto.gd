@@ -68,6 +68,7 @@ class ProtobufField:
 	var data_type: DATA_TYPE
 	var repeated : bool
 	var packed   : bool
+	var oneof
 	var map_key_type
 	var map_value_type
 	var message_class
@@ -82,7 +83,9 @@ class ProtobufField:
 		_packed: bool = true,
 		# These can also be other messages
 		_map_key_type = DATA_TYPE.INVALID_TYPE,
-		_map_value_type = DATA_TYPE.INVALID_TYPE
+		_map_value_type = DATA_TYPE.INVALID_TYPE,
+		# To contain the oneof field name if this field is part of a oneof
+		_oneof = null
 	):
 		name           = _name
 		position       = _position
@@ -92,6 +95,7 @@ class ProtobufField:
 		message_class  = _message_class
 		map_key_type   = _map_key_type
 		map_value_type = _map_value_type
+		oneof          = _oneof
 
 	func encode() -> PackedByteArray:
 		return ProtobufEncoder.encode_field(self)
@@ -113,6 +117,10 @@ class ProtobufField:
 		value = get_clean_value(_value)
 
 	func get_clean_value(_value):
+		# Allow for always setting the field value to null so it can be skipped when serializing
+		if _value == null:
+			return null
+
 		match data_type:
 			DATA_TYPE.BOOL:
 				if _value is bool: return _value
@@ -165,19 +173,64 @@ class ProtobufField:
 
 class ProtobufMessage:
 	var fields: Dictionary = {}
+	var oneof_map: Array[String] = []
 
+	## Initialize a message with optional data
+	## When initializing a message with a `oneof` type field you'll need to use the
+	## folowing format `{ case: "chosen_oneof_name", value: data }`
 	func _init(initial_data: Dictionary = {}):
 		_init_fields()
+		_build_oneof_map()
 		_load_initial_data(initial_data)
-
-	func _load_initial_data(initial_data: Dictionary):
-		for key in initial_data.keys():
-			if fields.has(key):
-				fields[key].set_value(initial_data[key])
 
 	## To be overriden by each message to prep it's fields
 	func _init_fields():
 		pass
+
+	func _build_oneof_map():
+		for field in fields.values():
+			if field.oneof != null and not oneof_map.has(field.oneof):
+				oneof_map.append(field.oneof)
+
+	func _load_initial_data(initial_data: Dictionary):
+		for field_name in initial_data.keys():
+			set_field(field_name, initial_data[field_name])
+
+	func set_field(field_name: String, value) -> void:
+		# Handle the normal path
+		if fields.has(field_name):
+			fields[field_name].set_value(value)
+			return
+
+		# If you're not trying to set a oneof type field then something really goofy is going on
+		if not oneof_map.has(field_name):
+			assert(false, "Field '%s' does not exist on message '%s'" % [ field_name, get_class() ])
+		
+		assert(typeof(value) == TYPE_DICTIONARY, "Oneof field '%s' value must be a dictionary" % field_name)
+		assert(value.has('case'), "Oneof field '%s' must have a 'case' key representing which oneof option to use. This should be the field name." % field_name)
+		assert(value.has('value'), "Oneof field '%s' must have a 'value' key containing the data to load into that field." % field_name)
+		assert(fields.has(value['case']), "Oneof field '%s' does not have an option for '%s' exist on message '%s'" % [ field_name, value['case'], get_class() ])
+
+		var oneof_field = fields[value['case']]
+		oneof_field.set_value(value['value'])
+
+		# Clear the other fields in the oneof
+		for field in fields.values():
+			if field.oneof == oneof_field.oneof and field.name != oneof_field.name:
+				field.set_value(null)
+
+	func get_field(field_name: String):
+		if fields.has(field_name):
+			return fields[field_name].get_value()
+
+		if oneof_map.has(field_name):
+			for field in fields.values():
+				if field.oneof == field_name and field.value != null:
+					return field.get_value()
+			
+			return null
+
+		assert(false, "Field '%s' does not exist on message '%s'" % [ field_name, get_class() ])
 
 	func add_field(
 		name: String,
@@ -188,10 +241,11 @@ class ProtobufMessage:
 		packed: bool = true,
 		# These can also refer to other message types uses as keys or values
 		map_key_type = DATA_TYPE.INVALID_TYPE,
-		map_value_type = DATA_TYPE.INVALID_TYPE
+		map_value_type = DATA_TYPE.INVALID_TYPE,
+		# To contain the oneof field name if this field is part of a oneof
+		_oneof = null
 	):
-		var field = ProtobufField.new(name, position, data_type, message_class, repeated, packed, map_key_type, map_value_type)
-		fields[name] = field
+		fields[name] = ProtobufField.new(name, position, data_type, message_class, repeated, packed, map_key_type, map_value_type, _oneof)
 
 	func encode() -> PackedByteArray:
 		var bytes: PackedByteArray = PackedByteArray()
@@ -257,7 +311,7 @@ class ProtobufEncoder:
 			bytes.resize(4)
 			bytes.encode_float(0, field.value)
 			return bytes
-		
+
 		if field.data_type == DATA_TYPE.DOUBLE:
 			bytes.resize(8)
 			bytes.encode_double(0, field.value)
@@ -337,7 +391,7 @@ class ProtobufEncoder:
 			if field.repeated and field.packed:
 				packed_data.append_array(encoded_field)
 				continue
-				
+
 			bytes.append_array(encoded_field)
 
 			# Append the next field descriptor if we're not at the last element
@@ -390,7 +444,7 @@ class ProtobufDecoder:
 	static func decode_fixed_field(field: ProtobufField, bytes: PackedByteArray, byte_count: int):
 		if field.data_type == DATA_TYPE.FLOAT:
 			return [ byte_count, bytes.decode_float(0) ]
-		
+
 		if field.data_type == DATA_TYPE.DOUBLE:
 			return [ byte_count, bytes.decode_double(0) ]
 
@@ -406,7 +460,6 @@ class ProtobufDecoder:
 		if value & most_significant_bit != 0:
 			# Sign-extend to 64 bits
 			value |= -most_significant_bit
-
 
 		return [ byte_count, value ]
 
