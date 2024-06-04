@@ -16,23 +16,11 @@ enum TestEnum {
   SECOND = 2;
 }
 
-// A nested message.
-message NestedMessage {
-  int32 id = 1;
-  string content = 2;
+message SubMessage {
+	int32 	m_int32    = 1;
 }
 
-// The main message.
 message TestMessage {
-  int32 id = 1;
-  string name = 2;
-  bool is_active = 3;
-  TestEnum status = 4;
-  NestedMessage nested = 5;
-  repeated int32 numbers = 6; // A repeated field.
-}
-
-message ScalarMessage {
   int32    m_int32    = 1;
   int64    m_int64    = 2;
   float    m_float    = 3;
@@ -45,45 +33,38 @@ message ScalarMessage {
   fixed64  m_fixed64  = 10;
   sfixed32 m_sfixed32 = 11;
   sfixed64 m_sfixed64 = 12;
-  bytes    m_bytes    = 13;
-  bool     m_bool     = 14;
+  bool     m_bool     = 13;
+  bytes    m_bytes    = 14;
   string   m_string   = 15;
-}
-
-// Oneof message.
-message OneofMessage {
-  oneof value {
-    int32 number = 1;
-    string name = 2;
+	SubMessage m_sub_message = 16;
+	map<string, int32> m_mapped = 17;
+	map<string, SubMessage> m_mapped_sub = 18;
+	repeated int32 r_int32 = 19;
+  TestEnum m_enum = 20;
+  oneof some_int32 {
+    int32 oneof_int32_1 = 30;
+    int32 oneof_int32_2 = 31;
+    int32 oneof_int32_3 = 32;
   }
+	int32 m_big_int32 = 12345;
 }
 
-// A message with a map field.
-message MapMessage {
-  map<string, int32> values = 1;
-}
-
-// A message with a timestamp field.
-message TimestampMessage {
-  google.protobuf.Timestamp timestamp = 1;
-}
-
-// A message with a duration field.
-message DurationMessage {
-  google.protobuf.Duration duration = 1;
-}
-
-// A message with a field that is a reference to another message.
-message ReferenceMessage {
-  TestMessage reference = 1;
-}
-
-// A message with a field that is a reference to a message in another file.
-// message ExternalReferenceMessage {
-//   ExternalMessage reference = 1;
+// // A message with a timestamp field.
+// message TimestampMessage {
+//   google.protobuf.Timestamp timestamp = 1;
 // }
 
-// A message with an Any field.
-message AnyMessage {
-  google.protobuf.Any any = 1;
-}
+// // A message with a duration field.
+// message DurationMessage {
+//   google.protobuf.Duration duration = 1;
+// }
+
+// // A message with a field that is a reference to a message in another file.
+// // message ExternalReferenceMessage {
+// //   ExternalMessage reference = 1;
+// // }
+
+// // A message with an Any field.
+// message AnyMessage {
+//   google.protobuf.Any any = 1;
+// }
