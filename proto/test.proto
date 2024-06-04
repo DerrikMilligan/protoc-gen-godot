@@ -1,13 +1,12 @@
 syntax = "proto3";
 
 // import the needed types
-import "google/protobuf/timestamp.proto";
-import "google/protobuf/duration.proto";
-import "google/protobuf/any.proto";
+// import "google/protobuf/timestamp.proto";
+// import "google/protobuf/duration.proto";
+// import "google/protobuf/any.proto";
 
-package test;
-
-option go_package = "protoc-gen-godo/example";
+package tests;
+option go_package = "tests/v1";
 
 // An enumeration.
 enum TestEnum {

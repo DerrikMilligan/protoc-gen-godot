@@ -4,7 +4,7 @@
 
 extends SceneTree
 
-const messages = preload("res://proto/compiled/protoc-gen-godo/example/test_pb.gd")
+const messages = preload("res://proto/compiled/tests/v1/test_pb.gd")
 
 class TestProtobufEncoder:
   static func run_tests():
