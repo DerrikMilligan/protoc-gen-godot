@@ -88,7 +88,7 @@ func getGodotFieldType(field *protogen.Field) string {
 	case protoreflect.StringKind:
 		return "String"
 	case protoreflect.BytesKind:
-		return "PoolByteArray"
+		return "PackedByteArray"
 	case protoreflect.MessageKind:
 		// If it's a real message
 		if !field.Desc.IsMap() {
@@ -157,6 +157,9 @@ func generateFile(gen *protogen.Plugin, file *protogen.File) {
 	for _, msg := range file.Messages {
 		g.P("## @generated from message ", msg.Desc.Name())
 		g.P("class ", msg.GoIdent.GoName, " extends proto.ProtobufMessage:")
+		g.P("\tstatic func from_bytes(bytes: PackedByteArray) -> ", msg.GoIdent.GoName, ":")
+		g.P("\t\treturn proto.ProtobufDecoder.decode_message(", msg.GoIdent.GoName, ".new(), bytes)")
+		g.P()
 		g.P("\tfunc _init_fields():")
 
 		for _, field := range msg.Fields {
@@ -173,6 +176,9 @@ func generateFile(gen *protogen.Plugin, file *protogen.File) {
 				// Regular messages that aren't maps
 				if !field.Desc.IsMap() {
 					fieldMethod = fieldMethod + ", " + string(field.Desc.Message().FullName().Name())
+					if field.Oneof != nil {
+						fieldMethod = fieldMethod + ", false, true, -1, -1, " + field.Oneof.GoName
+					}
 					break
 				}
 
@@ -187,18 +193,47 @@ func generateFile(gen *protogen.Plugin, file *protogen.File) {
 					println("Invalid map value type: ", field.Desc.MapValue().Kind())
 					return
 				}
-				fieldMethod = fieldMethod + ", null, true, false, proto.DATA_TYPE." + keyType + ", proto.DATA_TYPE." + valueType
+				if keyType == "MESSAGE" {
+					keyType = string(field.Desc.MapKey().Message().FullName().Name())
+				} else {
+					keyType = "proto.DATA_TYPE." + keyType
+				}
+				if valueType == "MESSAGE" {
+					valueType = string(field.Desc.MapValue().Message().FullName().Name())
+				} else {
+					valueType = "proto.DATA_TYPE." + valueType
+				}
+				fieldMethod = fieldMethod + ", null, true, false, " + keyType + ", " + valueType
+
+				if field.Oneof != nil {
+					fieldMethod = fieldMethod + ", \"" + string(field.Oneof.Desc.Name()) + "\""
+				}
 
 			case protoreflect.EnumKind:
 				fieldMethod = fieldMethod + ", " + string(field.Desc.Enum().FullName().Name())
+				if field.Oneof != nil {
+					fieldMethod = fieldMethod + ", false, true, -1, -1, \"" + string(field.Oneof.Desc.Name()) + "\""
+				}
 
 			default:
 				if field.Desc.IsList() {
 					fieldMethod = fieldMethod + ", null, true"
+
+					if field.Oneof != nil && !field.Desc.IsPacked() {
+						fieldMethod = fieldMethod + ", true, -1, -1, \"" + string(field.Oneof.Desc.Name()) + "\""
+					}
 				}
 
 				if field.Desc.IsPacked() {
 					fieldMethod = fieldMethod + ", true"
+
+					if field.Oneof != nil {
+						fieldMethod = fieldMethod + ", -1, -1, \"" + string(field.Oneof.Desc.Name()) + "\""
+					}
+				}
+
+				if !field.Desc.IsList() && !field.Desc.IsPacked() && field.Oneof != nil {
+					fieldMethod = fieldMethod + ", null , false, true, -1, -1, \"" + string(field.Oneof.Desc.Name()) + "\""
 				}
 			}
 
@@ -209,10 +244,10 @@ func generateFile(gen *protogen.Plugin, file *protogen.File) {
 
 		for _, field := range msg.Fields {
 			g.P("\tfunc get_", field.Desc.Name(), "() -> ", getGodotFieldType(field), ":")
-			g.P("\t\treturn fields[\"", field.Desc.Name(), "\"].get_value()")
+			g.P("\t\treturn get_field(\"", field.Desc.Name(), "\") as ", getGodotFieldType(field))
 			g.P()
 			g.P("\tfunc set_", field.Desc.Name(), "(_value: ", getGodotFieldType(field), "):")
-			g.P("\t\treturn fields[\"", field.Desc.Name(), "\"].set_value(_value)")
+			g.P("\t\tset_field(\"", field.Desc.Name(), "\", _value)")
 			g.P()
 
 			// Potentially in the future we could add a set method for maps to set the key and value

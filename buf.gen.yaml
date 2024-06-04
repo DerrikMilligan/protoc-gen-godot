@@ -1,7 +1,6 @@
 # Learn more: https://docs.buf.build/configuration/v1/buf-gen-yaml
 version: v1
 plugins:
-  #  - plugin: godot
    - path: ./protoc-gen-godot
      name: godot
      out: proto/compiled/

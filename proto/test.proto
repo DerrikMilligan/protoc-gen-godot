@@ -20,7 +20,7 @@ message SubMessage {
 	int32 	m_int32    = 1;
 }
 
-message ScalarMessage {
+message TestMessage {
   int32    m_int32    = 1;
   int64    m_int64    = 2;
   float    m_float    = 3;
@@ -46,15 +46,7 @@ message ScalarMessage {
     int32 oneof_int32_2 = 31;
     int32 oneof_int32_3 = 32;
   }
-	int32 r_big_int32 = 12345;
-}
-
-// Oneof message.
-message OneofMessage {
-  oneof value {
-    int32 number = 1;
-    string name = 2;
-  }
+	int32 m_big_int32 = 12345;
 }
 
 // // A message with a timestamp field.

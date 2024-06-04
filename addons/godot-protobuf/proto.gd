@@ -204,12 +204,12 @@ class ProtobufMessage:
 
 		# If you're not trying to set a oneof type field then something really goofy is going on
 		if not oneof_map.has(field_name):
-			assert(false, "Field '%s' does not exist on message '%s'" % [ field_name, get_class() ])
+			assert(false, "Field '%s' does not exist on message" % [ field_name ])
 		
 		assert(typeof(value) == TYPE_DICTIONARY, "Oneof field '%s' value must be a dictionary" % field_name)
 		assert(value.has('case'), "Oneof field '%s' must have a 'case' key representing which oneof option to use. This should be the field name." % field_name)
 		assert(value.has('value'), "Oneof field '%s' must have a 'value' key containing the data to load into that field." % field_name)
-		assert(fields.has(value['case']), "Oneof field '%s' does not have an option for '%s' exist on message '%s'" % [ field_name, value['case'], get_class() ])
+		assert(fields.has(value['case']), "Oneof field '%s' does not have an option for '%s' exist on message" % [ field_name, value['case'] ])
 
 		var oneof_field = fields[value['case']]
 		oneof_field.set_value(value['value'])
