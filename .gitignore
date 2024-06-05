@@ -1,3 +1,4 @@
 proto/compiled/
 node_modules/
 protoc-gen-godot
+protoc-gen-godot.exe

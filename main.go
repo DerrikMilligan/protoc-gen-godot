@@ -159,6 +159,7 @@ func generateFile(gen *protogen.Plugin, file *protogen.File) {
 		g.P("## @generated from message ", msg.Desc.Name())
 		g.P("class ", msg.GoIdent.GoName, " extends proto.ProtobufMessage:")
 		g.P("\tstatic func from_bytes(bytes: PackedByteArray) -> ", msg.GoIdent.GoName, ":")
+		g.P("const __NAME__ := \"", msg.GoIdent.GoName, "\"")
 		g.P("\t\treturn proto.ProtobufDecoder.decode_message(", msg.GoIdent.GoName, ".new(), bytes)")
 		g.P()
 
