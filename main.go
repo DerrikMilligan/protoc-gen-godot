@@ -283,7 +283,7 @@ func generateFile(gen *protogen.Plugin, file *protogen.File) {
 			g.P("\t\treturn get_field(\"", oneofName, "\")")
 			g.P()
 			g.P("\tfunc set_", oneofName, "(value):")
-			g.P("\t\treturn set_field(\"", oneofName, "\", value)")
+			g.P("\t\tset_field(\"", oneofName, "\", value)")
 			g.P()
 		}
 
