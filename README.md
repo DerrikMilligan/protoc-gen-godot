@@ -1,6 +1,12 @@
 
 # Generating Protos
 
+Install the dependencies:
+
+```bash
+go get
+```
+
 Make sure you have the binary built.
 
 ```bash
