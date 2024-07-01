@@ -10,9 +10,9 @@ option go_package = "tests/v1";
 
 // An enumeration.
 enum TestEnum {
-  UNKNOWN = 0;
-  FIRST = 1;
-  SECOND = 2;
+	UNKNOWN = 0;
+	FIRST = 1;
+	SECOND = 2;
 }
 
 message SubMessage {
@@ -20,31 +20,34 @@ message SubMessage {
 }
 
 message TestMessage {
-  int32    m_int32    = 1;
-  int64    m_int64    = 2;
-  float    m_float    = 3;
-  double   m_double   = 4;
-  uint32   m_uint32   = 5;
-  uint64   m_uint64   = 6;
-  sint32   m_sint32   = 7;
-  sint64   m_sint64   = 8;
-  fixed32  m_fixed32  = 9;
-  fixed64  m_fixed64  = 10;
-  sfixed32 m_sfixed32 = 11;
-  sfixed64 m_sfixed64 = 12;
-  bool     m_bool     = 13;
-  bytes    m_bytes    = 14;
-  string   m_string   = 15;
+	int32    m_int32    = 1;
+	int64    m_int64    = 2;
+	float    m_float    = 3;
+	double   m_double   = 4;
+	uint32   m_uint32   = 5;
+	uint64   m_uint64   = 6;
+	sint32   m_sint32   = 7;
+	sint64   m_sint64   = 8;
+	fixed32  m_fixed32  = 9;
+	fixed64  m_fixed64  = 10;
+	sfixed32 m_sfixed32 = 11;
+	sfixed64 m_sfixed64 = 12;
+	bool     m_bool     = 13;
+	bytes    m_bytes    = 14;
+	string   m_string   = 15;
 	SubMessage m_sub_message = 16;
 	map<string, int32> m_mapped = 17;
 	map<string, SubMessage> m_mapped_sub = 18;
 	repeated int32 r_int32 = 19;
-  TestEnum m_enum = 20;
-  oneof some_int32 {
-    int32 oneof_int32_1 = 30;
-    int32 oneof_int32_2 = 31;
-    int32 oneof_int32_3 = 32;
-  }
+	TestEnum m_enum = 20;
+	oneof some_int32 {
+		int32 oneof_int32_1 = 30;
+		int32 oneof_int32_2 = 31;
+		int32 oneof_int32_3 = 32;
+	}
+	string sequential_string1 = 40;
+	string sequential_string2 = 41;
+	string sequential_string3 = 42;
 	int32 m_big_int32 = 12345;
 }
 

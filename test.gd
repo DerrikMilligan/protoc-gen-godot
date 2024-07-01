@@ -54,6 +54,11 @@ class TestProtobufEncoder:
     assert(messages.TestMessage.new({ "some_int32": { 'case': 'oneof_int32_1', 'value': 123 } }).encode() == PackedByteArray([0xF0, 0x01, 0x7B]))
     assert(messages.TestMessage.new({ "some_int32": { 'case': 'oneof_int32_2', 'value': 123 } }).encode() == PackedByteArray([0xF8, 0x01, 0x7B]))
     assert(messages.TestMessage.new({ "some_int32": { 'case': 'oneof_int32_3', 'value': 123 } }).encode() == PackedByteArray([0x80, 0x02, 0x7B]))
+    assert(messages.TestMessage.new({
+      'sequential_string1': 'qwer',
+      'sequential_string2': 'asdf',
+      'sequential_string3': 'zxcv',
+    }).encode() == PackedByteArray([0xC2, 0x02, 0x04, 0x71, 0x77, 0x65, 0x72, 0xCA, 0x02, 0x04, 0x61, 0x73, 0x64, 0x66, 0xD2, 0x02, 0x04, 0x7A, 0x78, 0x63, 0x76]))
 
   static func test_message_decoding():
     assert(messages.TestMessage.from_bytes([0x08, 0x7B]).encode() == PackedByteArray([0x08, 0x7B]))
