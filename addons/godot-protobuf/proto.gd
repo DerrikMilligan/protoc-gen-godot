@@ -105,17 +105,18 @@ class ProtobufField:
 		return ProtobufEncoder.encode_field(self)
 
 	func get_value():
-		match data_type:
-			DATA_TYPE.MAP:
-				var map_dictionary = {}
+		if data_type == DATA_TYPE.MAP:
+			return get_map_value()
 
-				for item in value:
-					map_dictionary[item[0]] = item[1]
+		return value
 
-				return map_dictionary
+	func get_map_value() -> Dictionary:
+		var map_dictionary = {}
 
-			_:
-				return value
+		for item in value:
+			map_dictionary[item[0]] = item[1]
+
+		return map_dictionary
 
 	func set_value(_value) -> void:
 		if data_type != DATA_TYPE.MAP and repeated:
@@ -589,7 +590,6 @@ class ProtobufDecoder:
 
 		# Skip the field if we don't have it in our fields
 		if field == null:
-			# byte_index += field_descriptor
 			return [ decoded_descriptor[0], null, null ]
 
 		if field.repeated and field.packed:

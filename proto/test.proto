@@ -20,6 +20,7 @@ message SubMessage {
 	string sequential_string1 = 40;
 	string sequential_string2 = 41;
 	string sequential_string3 = 42;
+	repeated string repeated_string = 50;
 }
 
 message TestMessage {
