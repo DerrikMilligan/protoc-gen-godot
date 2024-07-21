@@ -228,7 +228,7 @@ func generateFile(gen *protogen.Plugin, file *protogen.File) {
 					fieldMethod = fieldMethod + ", null, true"
 
 					if field.Oneof != nil && !field.Desc.IsPacked() {
-						fieldMethod = fieldMethod + ", true, -1, -1, \"" + string(field.Oneof.Desc.Name()) + "\""
+						fieldMethod = fieldMethod + ", false, -1, -1, \"" + string(field.Oneof.Desc.Name()) + "\""
 					}
 				}
 
@@ -238,16 +238,10 @@ func generateFile(gen *protogen.Plugin, file *protogen.File) {
 					if field.Oneof != nil {
 						fieldMethod = fieldMethod + ", -1, -1, \"" + string(field.Oneof.Desc.Name()) + "\""
 					}
-				} else {
-					fieldMethod = fieldMethod + ", false"
-
-					if field.Oneof != nil {
-						fieldMethod = fieldMethod + ", -1, -1, \"" + string(field.Oneof.Desc.Name()) + "\""
-					}
 				}
 
 				if !field.Desc.IsList() && !field.Desc.IsPacked() && field.Oneof != nil {
-					fieldMethod = fieldMethod + ", null , false, true, -1, -1, \"" + string(field.Oneof.Desc.Name()) + "\""
+					fieldMethod = fieldMethod + ", null , false, false, -1, -1, \"" + string(field.Oneof.Desc.Name()) + "\""
 				}
 			}
 
