@@ -97,6 +97,10 @@ class ProtobufField:
 		map_value_type = _map_value_type
 		oneof          = _oneof
 
+		# Technically this is true but we're cheating a bit with the packed field and how we use it
+		# if _data_type == DATA_TYPE.STRING or _data_type == DATA_TYPE.BYTES:
+		# 	assert(not _packed, "String and Bytes fields can't be packed")
+
 	func encode() -> PackedByteArray:
 		return ProtobufEncoder.encode_field(self)
 
@@ -114,7 +118,28 @@ class ProtobufField:
 				return value
 
 	func set_value(_value) -> void:
-		value = get_clean_value(_value)
+		if data_type != DATA_TYPE.MAP and repeated:
+			set_repeated_value(_value)
+		else:
+			value = get_clean_value(_value)
+
+	func set_repeated_value(_value) -> void:
+		assert(typeof(_value) == TYPE_ARRAY, "Repeated field '%s' value must be an array" % name)
+		value = []
+
+		for item in _value:
+			value.append(get_clean_value(item))
+
+	func append_repeated_value(_value) -> void:
+		if not repeated:
+			assert(false, "Field '%s' is not a repeated field" % name)
+
+		var clean_value = get_clean_value(_value)
+
+		if typeof(value) != TYPE_ARRAY:
+			value = [ clean_value ]
+		else:
+			value.append(clean_value)
 
 	func get_clean_value(_value):
 		# Allow for always setting the field value to null so it can be skipped when serializing
@@ -137,7 +162,8 @@ class ProtobufField:
 				assert(_value >= 0, "Invalid value type for field: '%s' value given: '%s'. Unsigned integer can't be negative" % [name, _value])
 				return _value
 			DATA_TYPE.STRING:
-				return str(_value)
+				assert(_value is String, "Invalid value type for field: '%s' value given: '%s'. Must be a string" % [name, _value])
+				return _value
 			DATA_TYPE.BYTES:
 				assert(_value is PackedByteArray, "Invalid value type for field: '%s' value given: '%s'. Expected PackedByteArray" % [name, _value])
 				return _value
@@ -597,11 +623,13 @@ class ProtobufDecoder:
 			if decoded_field[1] == null or field == null:
 				continue
 
-			match field.data_type:
-				# For messages we'll already have the message object and just need to assign it
-				DATA_TYPE.MESSAGE:
-					field.value = decoded_field[1]
-				_:
-					field.set_value(decoded_field[1])
+			# For messages we'll already have the message object and just need to assign it
+			if field.data_type == DATA_TYPE.MESSAGE:
+				field.value = decoded_field[1]
+			# Handle the repeated fields, skip map fields because we're cheeky about how we use them
+			elif field.repeated and not field.packed and field.data_type != DATA_TYPE.MAP:
+				field.append_repeated_value(decoded_field[1])
+			else:
+				field.set_value(decoded_field[1])
 
 		return message
