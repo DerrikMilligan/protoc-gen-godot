@@ -76,6 +76,10 @@ func getEnumTypeFromField(field *protogen.Field) (string, bool) {
 }
 
 func getGodotFieldType(field *protogen.Field) string {
+	if field.Desc.IsList() && !field.Desc.IsPacked() {
+		return "Array"
+	}
+
 	switch field.Desc.Kind() {
 	case protoreflect.BoolKind:
 		return "bool"
@@ -227,8 +231,14 @@ func generateFile(gen *protogen.Plugin, file *protogen.File) {
 				if field.Desc.IsList() {
 					fieldMethod = fieldMethod + ", null, true"
 
-					if field.Oneof != nil && !field.Desc.IsPacked() {
-						fieldMethod = fieldMethod + ", false, -1, -1, \"" + string(field.Oneof.Desc.Name()) + "\""
+					if !field.Desc.IsPacked() {
+						fieldMethod = fieldMethod + ", false"
+					} else {
+						fieldMethod = fieldMethod + ", true"
+					}
+
+					if field.Oneof != nil {
+						fieldMethod = fieldMethod + ", -1, -1, \"" + string(field.Oneof.Desc.Name()) + "\""
 					}
 				}
 
