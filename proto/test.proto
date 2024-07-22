@@ -55,6 +55,7 @@ message TestMessage {
 	string sequential_string3 = 42;
 
 	repeated string repeated_string = 50;
+	repeated SubMessage repeated_submessage = 51;
 
 	int32 m_big_int32 = 12345;
 }

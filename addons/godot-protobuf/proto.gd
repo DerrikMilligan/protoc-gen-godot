@@ -623,12 +623,12 @@ class ProtobufDecoder:
 			if decoded_field[1] == null or field == null:
 				continue
 
-			# For messages we'll already have the message object and just need to assign it
-			if field.data_type == DATA_TYPE.MESSAGE:
-				field.value = decoded_field[1]
 			# Handle the repeated fields, skip map fields because we're cheeky about how we use them
-			elif field.repeated and not field.packed and field.data_type != DATA_TYPE.MAP:
+			if field.repeated and not field.packed and field.data_type != DATA_TYPE.MAP:
 				field.append_repeated_value(decoded_field[1])
+			# For messages we'll already have the message object and just need to assign it
+			elif field.data_type == DATA_TYPE.MESSAGE:
+				field.value = decoded_field[1]
 			else:
 				field.set_value(decoded_field[1])
 

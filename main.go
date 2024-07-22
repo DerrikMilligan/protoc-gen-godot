@@ -188,9 +188,23 @@ func generateFile(gen *protogen.Plugin, file *protogen.File) {
 				// Regular messages that aren't maps
 				if !field.Desc.IsMap() {
 					fieldMethod = fieldMethod + ", " + string(field.Desc.Message().FullName().Name())
-					if field.Oneof != nil {
+
+					if field.Desc.IsList() {
+						fieldMethod = fieldMethod + ", true"
+
+						if !field.Desc.IsPacked() {
+							fieldMethod = fieldMethod + ", false"
+						} else {
+							fieldMethod = fieldMethod + ", true"
+						}
+
+						if field.Oneof != nil {
+							fieldMethod = fieldMethod + ", -1, -1, \"" + string(field.Oneof.Desc.Name()) + "\""
+						}
+					} else if field.Oneof != nil {
 						fieldMethod = fieldMethod + ", false, true, -1, -1, \"" + string(field.Oneof.Desc.Name()) + "\""
 					}
+
 					break
 				}
 
